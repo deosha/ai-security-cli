@@ -44,6 +44,7 @@ def main():
     \b
       scan   Static code analysis for OWASP LLM Top 10 vulnerabilities
       test   Live model testing for LLM security vulnerabilities
+      audit  Security posture audit with maturity scoring
     """
     pass
 
@@ -419,6 +420,102 @@ def test(
 def list_tests():
     """List all available security tests."""
     _print_available_tests()
+
+
+@main.command()
+@click.argument("path", type=click.Path(exists=True))
+@click.option(
+    "-o", "--output",
+    type=click.Choice(["text", "json", "html"]),
+    default="text",
+    help="Output format (default: text)",
+)
+@click.option(
+    "-f", "--output-file",
+    type=click.Path(),
+    help="Write output to file",
+)
+@click.option(
+    "-v", "--verbose",
+    is_flag=True,
+    help="Enable verbose output",
+)
+def audit(
+    path: str,
+    output: str,
+    output_file: Optional[str],
+    verbose: bool,
+):
+    """
+    Perform security posture audit on a codebase.
+
+    Automatically detects security controls and calculates maturity scores
+    across multiple categories:
+
+    \b
+      - Prompt Security: Sanitization, rate limiting, validation
+      - Model Security: Access control, versioning, dependency scanning
+      - Data Privacy: PII detection, encryption, audit logging
+      - OWASP LLM Top 10: Coverage of all 10 vulnerability categories
+      - Blue Team Ops: Monitoring, drift detection, incident response
+      - Governance: Explainability, bias detection, compliance
+
+    Unlike 'scan' which finds vulnerabilities, 'audit' evaluates what
+    security controls ARE implemented in your codebase.
+
+    Examples:
+
+    \b
+      ai-security-cli audit ./my-project
+      ai-security-cli audit ./my-project -o html -f audit-report.html
+      ai-security-cli audit ./my-project -o json -f audit.json
+    """
+    setup_logging(verbose)
+
+    console.print(Panel.fit(
+        "[bold blue]AI Security CLI[/bold blue] - Security Posture Audit",
+        border_style="blue",
+    ))
+
+    # Import audit engine
+    from ai_security.audit import AuditEngine
+
+    # Initialize engine
+    engine = AuditEngine(verbose=verbose)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Running security audit...", total=None)
+
+        try:
+            result = engine.run(Path(path))
+            progress.update(task, description="Audit complete!")
+        except Exception as e:
+            console.print(f"[red]Error during audit:[/red] {e}")
+            if verbose:
+                import traceback
+                traceback.print_exc()
+            sys.exit(1)
+
+    # Generate output
+    if output == "json":
+        report = engine.generate_report(result, format="json")
+    elif output == "html":
+        report = engine.generate_report(result, format="html")
+    else:
+        # Text output
+        engine.print_summary(result)
+        report = None
+
+    # Save or print report
+    if output_file and report:
+        Path(output_file).write_text(report, encoding="utf-8")
+        console.print(f"\n[green]Report saved to:[/green] {output_file}")
+    elif report:
+        console.print(report)
 
 
 def _print_scan_results(result):
