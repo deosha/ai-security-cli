@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-security-cli"
-version = "1.0.0b2"
+version = "1.0.0b3"
 description = "Unified AI/LLM Security Scanner - Static Code Analysis + Live Model Testing"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -54,8 +54,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/deosha/ai-security-cli"
+Homepage = "https://aisentry.co"
 Repository = "https://github.com/deosha/ai-security-cli"
+Documentation = "https://aisentry.co/docs.html"
 Issues = "https://github.com/deosha/ai-security-cli/issues"
 
 [project.optional-dependencies]
