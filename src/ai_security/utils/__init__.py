@@ -26,6 +26,23 @@ from .statistical import (
     EWMA,
     AnomalyDetector,
 )
+from .ast_utils import (
+    names_in_expr,
+    names_in_fstring,
+    is_sanitization_call,
+    is_prompt_template_usage,
+    get_call_name,
+    get_full_call_name,
+    find_assignments_in_scope,
+    resolve_single_hop,
+    extract_dict_content_names,
+    is_passthrough_call,
+    find_call_at_line,
+    is_llm_sink_keyword,
+    is_llm_api_call,
+    LLM_SINK_KEYWORDS,
+    LLM_API_METHODS,
+)
 
 __all__ = [
     # Scoring
@@ -53,4 +70,20 @@ __all__ = [
     "CircularBuffer",
     "EWMA",
     "AnomalyDetector",
+    # AST Utilities
+    "names_in_expr",
+    "names_in_fstring",
+    "is_sanitization_call",
+    "is_prompt_template_usage",
+    "get_call_name",
+    "get_full_call_name",
+    "find_assignments_in_scope",
+    "resolve_single_hop",
+    "extract_dict_content_names",
+    "is_passthrough_call",
+    "find_call_at_line",
+    "is_llm_sink_keyword",
+    "is_llm_api_call",
+    "LLM_SINK_KEYWORDS",
+    "LLM_API_METHODS",
 ]

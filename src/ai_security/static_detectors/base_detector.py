@@ -141,6 +141,39 @@ class BaseDetector(ABC):
         conf_level = Confidence.from_score(confidence)
         return conf_level.description
 
+    def apply_mitigations(self, confidence: float, evidence: Dict[str, Any]) -> float:
+        """
+        Apply mitigation-based confidence demotions.
+
+        Override in subclasses to implement domain-specific mitigation detection.
+        This allows detectors to reduce confidence when mitigating controls are present,
+        rather than relying on scanner-level filters.
+
+        Args:
+            confidence: Base confidence score (0.0-1.0)
+            evidence: Dictionary of evidence for the finding
+
+        Returns:
+            Adjusted confidence score after applying mitigations
+
+        Example mitigations by detector:
+            LLM01: sanitize/escape/allowlist functions, PromptTemplate usage
+            LLM02: html.escape/bleach, parameterized SQL, subprocess shell=False
+            LLM05: verified pinning, signed downloads, no dynamic plugin exec
+            LLM09: human-in-the-loop approvals, policy checks
+
+        Example implementation:
+            def apply_mitigations(self, confidence: float, evidence: Dict) -> float:
+                if evidence.get('has_sanitization'):
+                    confidence -= 0.25
+                if evidence.get('has_parameterized_query'):
+                    confidence -= 0.30
+                return max(0.0, confidence)
+        """
+        # Default: no mitigation adjustments
+        # Subclasses override to add domain-specific logic
+        return confidence
+
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}"

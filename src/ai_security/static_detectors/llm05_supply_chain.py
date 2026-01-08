@@ -35,36 +35,45 @@ class SupplyChainDetector(BaseDetector):
     name = "Supply Chain Vulnerabilities"
     default_confidence_threshold = 0.6
 
-    # Model loading patterns
-    MODEL_LOADING_PATTERNS = {
-        'huggingface': ['from_pretrained', 'AutoModel', 'AutoTokenizer', 'pipeline'],
-        'openai': ['openai.', 'ChatOpenAI', 'OpenAI('],
-        'anthropic': ['anthropic.', 'ChatAnthropic', 'Anthropic('],
-        'langchain': ['ChatOpenAI', 'ChatAnthropic', 'HuggingFacePipeline'],
-        'tensorflow': ['tf.keras.models.load_model', 'load_model'],
-        'pytorch': ['torch.load', 'torch.hub.load'],
-        'custom': ['load(', 'download(', 'fetch_model']
+    # Model loading patterns - functions that actually load/download models
+    MODEL_LOADING_FUNCTIONS = {
+        # HuggingFace - the most common ML model loading
+        'from_pretrained',
+        'AutoModel', 'AutoTokenizer', 'AutoModelForCausalLM',
+        'AutoModelForSequenceClassification', 'AutoModelForTokenClassification',
+        'pipeline',
+        # PyTorch
+        'torch.load', 'torch.hub.load', 'load_state_dict',
+        # TensorFlow/Keras
+        'load_model', 'tf.saved_model.load', 'keras.models.load_model',
+        # Generic model loading
+        'load_weights', 'restore', 'load_checkpoint',
+        # Sentence transformers
+        'SentenceTransformer',
     }
 
-    # Trusted model repositories
+    # Trusted model repositories - URLs containing these are OK
     TRUSTED_SOURCES = {
-        'huggingface.co', 'huggingface-models', 'openai.com', 'anthropic.com',
-        'tensorflow.org', 'pytorch.org', 'registry.hub.docker.com'
+        'huggingface.co', 'hf.co', 'huggingface-models',
+        'openai.com', 'anthropic.com',
+        'tensorflow.org', 'pytorch.org',
+        'registry.hub.docker.com',
+        'storage.googleapis.com/tensorflow',
+        'download.pytorch.org',
     }
 
     # Verification patterns (positive indicators)
     VERIFICATION_PATTERNS = {
         'checksum': ['sha256', 'md5sum', 'hashlib', 'verify_checksum', 'check_hash'],
         'signature': ['gpg', 'signature', 'verify_signature', 'signed'],
-        'pinning': ['==', 'model_version', 'version=', '@', 'revision='],
+        'pinning': ['revision=', 'model_version', 'version=', '@'],
         'sbom': ['sbom', 'bill_of_materials', 'dependencies.json']
     }
 
-    # Risky patterns
-    RISKY_PATTERNS = {
-        'arbitrary_url': [r'https?://(?!(?:' + '|'.join(TRUSTED_SOURCES) + r'))'],
-        'local_path': [r'[\'"](?:/|\.\.?/|~/).*?\.(?:bin|pt|h5|ckpt|safetensors)[\'"]'],
-        'dynamic_model': ['model_name = request.', 'model_id = os.getenv', 'model = user_input']
+    # Model file extensions - only flag URLs/paths with these extensions
+    MODEL_FILE_EXTENSIONS = {
+        '.pt', '.pth', '.bin', '.h5', '.hdf5', '.ckpt',
+        '.safetensors', '.onnx', '.pb', '.tflite', '.model'
     }
 
     def _gather_potential_findings(self, parsed_data: Dict[str, Any]) -> List[Finding]:
@@ -166,68 +175,107 @@ class SupplyChainDetector(BaseDetector):
         source_lines: List[str],
         file_path: str
     ) -> List[Finding]:
-        """Check for untrusted model sources"""
+        """
+        Check for untrusted model sources - ONLY in model loading contexts.
+
+        Only flags:
+        1. URLs to model files (with model extensions) from untrusted sources
+        2. Dynamic model paths from user input
+        3. Local paths to model files without verification
+
+        Does NOT flag:
+        - Generic HTTP requests (APIs, webhooks, etc.)
+        - URLs in comments or docstrings
+        - Trusted sources (HuggingFace, PyTorch, TensorFlow, etc.)
+        """
         findings = []
         source_code = '\n'.join(source_lines)
 
-        # Check for arbitrary URLs
-        for pattern_name, patterns in self.RISKY_PATTERNS.items():
-            for pattern in patterns:
-                matches = re.finditer(pattern, source_code, re.IGNORECASE)
-                for match in matches:
-                    line_num = source_code[:match.start()].count('\n') + 1
-                    matched_text = match.group(0)
+        # Check 1: URLs that look like model downloads (have model file extensions)
+        # Pattern: http(s)://....(model extension)
+        model_url_pattern = r'["\']https?://[^"\']+\.(?:pt|pth|bin|h5|hdf5|ckpt|safetensors|onnx|pb|tflite|model)["\']'
+        for match in re.finditer(model_url_pattern, source_code, re.IGNORECASE):
+            url = match.group(0).strip('"\'')
+            line_num = source_code[:match.start()].count('\n') + 1
 
-                    evidence = {
-                        'pattern_type': pattern_name,
-                        'matched_text': matched_text,
-                        'line': line_num
-                    }
+            # Skip if from trusted source
+            if any(trusted in url.lower() for trusted in self.TRUSTED_SOURCES):
+                continue
 
-                    if pattern_name == 'arbitrary_url':
-                        severity = Severity.HIGH
-                        description = (
-                            f"Untrusted URL '{matched_text}' found on line {line_num}. "
-                            f"Loading models from arbitrary URLs poses significant security risks "
-                            f"including malicious model injection, backdoors, and data exfiltration."
-                        )
-                    elif pattern_name == 'local_path':
-                        severity = Severity.MEDIUM
-                        description = (
-                            f"Local file path '{matched_text}' found on line {line_num}. "
-                            f"Loading models from local paths without verification can introduce "
-                            f"compromised models if the filesystem is not properly secured."
-                        )
-                    else:  # dynamic_model
-                        severity = Severity.HIGH
-                        description = (
-                            f"Dynamic model selection from user input on line {line_num}. "
-                            f"Allowing users to specify model names/paths enables attackers to "
-                            f"load malicious models or bypass security controls."
-                        )
+            evidence = {
+                'pattern_type': 'untrusted_model_url',
+                'url': url,
+                'line': line_num
+            }
 
-                    findings.append(Finding(
-                        id=f"{self.detector_id}_{file_path}_{line_num}_{pattern_name}",
-                        category=f"{self.detector_id}: Supply Chain Vulnerabilities",
-                        severity=severity,
-                        confidence=self.calculate_confidence(evidence),
-                        title=f"Untrusted model source: {pattern_name}",
-                        description=description,
-                        file_path=file_path,
-                        line_number=line_num,
-                        code_snippet=self._get_code_snippet(source_lines, line_num, 3),
-                        recommendation=(
-                            "Secure Model Loading:\n"
-                            "1. Only load models from trusted registries (HuggingFace, official repos)\n"
-                            "2. Verify model checksums/signatures before loading\n"
-                            "3. Use allowlists for permitted models\n"
-                            "4. Implement content scanning for downloaded models\n"
-                            "5. Never allow user-controlled model paths\n"
-                            "6. Use isolated environments for model loading\n"
-                            "7. Maintain an SBOM (Software Bill of Materials) for AI components"
-                        ),
-                        evidence=evidence
-                    ))
+            findings.append(Finding(
+                id=f"{self.detector_id}_{file_path}_{line_num}_model_url",
+                category=f"{self.detector_id}: Supply Chain Vulnerabilities",
+                severity=Severity.HIGH,
+                confidence=self.calculate_confidence(evidence),
+                title="Model downloaded from untrusted URL",
+                description=(
+                    f"Model file downloaded from untrusted URL '{url}' on line {line_num}. "
+                    f"Loading models from arbitrary URLs poses significant security risks "
+                    f"including malicious model injection, backdoors, and data exfiltration."
+                ),
+                file_path=file_path,
+                line_number=line_num,
+                code_snippet=self._get_code_snippet(source_lines, line_num, 3),
+                recommendation=(
+                    "Secure Model Loading:\n"
+                    "1. Only load models from trusted registries (HuggingFace, PyTorch Hub)\n"
+                    "2. Verify model checksums/signatures before loading\n"
+                    "3. Pin specific model versions with revision hashes\n"
+                    "4. Consider using safetensors format which doesn't allow arbitrary code execution"
+                ),
+                evidence=evidence
+            ))
+
+        # Check 2: Dynamic model paths from user/request input
+        dynamic_patterns = [
+            (r'model_name\s*=\s*request\.', 'request input'),
+            (r'model_path\s*=\s*request\.', 'request input'),
+            (r'model_id\s*=\s*os\.getenv', 'environment variable'),
+            (r'from_pretrained\s*\(\s*user_', 'user input'),
+            (r'from_pretrained\s*\(\s*request\.', 'request input'),
+            (r'torch\.load\s*\(\s*user_', 'user input'),
+            (r'torch\.load\s*\(\s*request\.', 'request input'),
+        ]
+
+        for pattern, source_type in dynamic_patterns:
+            for match in re.finditer(pattern, source_code, re.IGNORECASE):
+                line_num = source_code[:match.start()].count('\n') + 1
+
+                evidence = {
+                    'pattern_type': 'dynamic_model_path',
+                    'source': source_type,
+                    'line': line_num
+                }
+
+                findings.append(Finding(
+                    id=f"{self.detector_id}_{file_path}_{line_num}_dynamic",
+                    category=f"{self.detector_id}: Supply Chain Vulnerabilities",
+                    severity=Severity.CRITICAL,
+                    confidence=0.9,
+                    title=f"Dynamic model path from {source_type}",
+                    description=(
+                        f"Model path determined by {source_type} on line {line_num}. "
+                        f"Allowing external control of model paths enables attackers to "
+                        f"load malicious models or access unauthorized model files."
+                    ),
+                    file_path=file_path,
+                    line_number=line_num,
+                    code_snippet=self._get_code_snippet(source_lines, line_num, 3),
+                    recommendation=(
+                        "Secure Model Selection:\n"
+                        "1. Use allowlists for permitted model names\n"
+                        "2. Validate and sanitize model identifiers\n"
+                        "3. Never allow arbitrary file paths from user input\n"
+                        "4. Use model registries with access controls"
+                    ),
+                    evidence=evidence
+                ))
 
         return findings
 
@@ -249,13 +297,13 @@ class SupplyChainDetector(BaseDetector):
 
         # Look for model loading without verification
         for llm_call in llm_calls:
-            func_name = llm_call.get('function', '').lower()
+            func_name = llm_call.get('function', '')
             line_num = llm_call.get('line', 0)
 
             # Check if this is a model loading function
             is_model_loading = any(
-                any(pattern.lower() in func_name for pattern in patterns)
-                for patterns in self.MODEL_LOADING_PATTERNS.values()
+                pattern.lower() in func_name.lower()
+                for pattern in self.MODEL_LOADING_FUNCTIONS
             )
 
             if is_model_loading and not has_verification and line_num > 0:

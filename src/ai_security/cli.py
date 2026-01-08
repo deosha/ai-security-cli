@@ -20,6 +20,7 @@ from ai_security.reporters.json_reporter import JSONReporter
 from ai_security.reporters.html_reporter import HTMLReporter
 from ai_security.reporters.sarif_reporter import SARIFReporter
 from ai_security.providers import PROVIDER_MAP, get_available_providers
+from ai_security.config import load_config, ScanConfig
 
 console = Console()
 
@@ -71,8 +72,8 @@ def main():
 @click.option(
     "-c", "--confidence",
     type=float,
-    default=0.7,
-    help="Minimum confidence threshold (0.0-1.0, default: 0.7)",
+    default=None,
+    help="Global confidence threshold (0.0-1.0, default: 0.7)",
 )
 @click.option(
     "--category",
@@ -89,15 +90,53 @@ def main():
     default=True,
     help="Include security posture audit in HTML reports (default: enabled)",
 )
+@click.option(
+    "--config",
+    type=click.Path(exists=True),
+    help="Path to .ai-security.yaml config file",
+)
+@click.option(
+    "--dedup",
+    type=click.Choice(["exact", "off"]),
+    default=None,
+    help="Deduplication mode (default: exact)",
+)
+@click.option(
+    "--exclude-dir",
+    multiple=True,
+    help="Directories to exclude from scanning (repeatable)",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["recall", "strict"]),
+    default=None,
+    help="Scan mode: recall (default, high sensitivity) or strict (higher thresholds)",
+)
+@click.option(
+    "--exclude-tests/--include-tests",
+    default=False,
+    help="Exclude test files from scanning (default: include with demoted confidence)",
+)
+@click.option(
+    "--demote-tests/--no-demote-tests",
+    default=True,
+    help="Reduce confidence for findings in test files (default: enabled)",
+)
 def scan(
     path: str,
     output: str,
     output_file: Optional[str],
     severity: str,
-    confidence: float,
+    confidence: Optional[float],
     category: tuple,
     verbose: bool,
     audit: bool,
+    config: Optional[str],
+    dedup: Optional[str],
+    exclude_dir: tuple,
+    mode: Optional[str],
+    exclude_tests: bool,
+    demote_tests: bool,
 ):
     """
     Perform static code analysis for security vulnerabilities.
@@ -163,11 +202,33 @@ def scan(
     # Convert categories tuple to list
     categories = list(category) if category else None
 
-    # Initialize scanner
+    # Build CLI options for config
+    cli_options = {}
+    if confidence is not None:
+        cli_options['global_threshold'] = confidence
+    if dedup is not None:
+        cli_options['dedup'] = dedup
+    if exclude_dir:
+        cli_options['exclude_dirs'] = list(exclude_dir)
+    if mode is not None:
+        cli_options['mode'] = mode
+    cli_options['exclude_tests'] = exclude_tests
+    cli_options['demote_tests'] = demote_tests
+
+    # Load config with precedence: CLI > env > yaml > defaults
+    config_path = Path(config) if config else None
+    scan_path = Path(path) if not is_remote_url(path) else None
+    scan_config = load_config(
+        cli_options=cli_options,
+        config_path=config_path,
+        scan_path=scan_path,
+    )
+
+    # Initialize scanner with config
     scanner = StaticScanner(
         verbose=verbose,
-        confidence_threshold=confidence,
         categories=categories,
+        config=scan_config,
     )
 
     with Progress(
