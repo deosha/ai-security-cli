@@ -4,6 +4,29 @@ A unified command-line tool for AI/LLM security scanning and testing. Combines s
 
 **Website**: [aisentry.co](https://aisentry.co)
 
+## Benchmarks
+
+| Metric | Value |
+|--------|-------|
+| **Precision** | 20.0% |
+| **Recall** | 57.8% |
+| **F1 Score** | 29.7% |
+
+**Per-Category Detection:**
+
+| Category | Recall | Status |
+|----------|--------|--------|
+| LLM01: Prompt Injection | 100% | Excellent |
+| LLM04: Model DoS | 100% | Excellent |
+| LLM08: Excessive Agency | 100% | Excellent |
+| LLM09: Overreliance | 100% | Excellent |
+| LLM10: Model Theft | 86% | Good |
+| LLM06: Sensitive Info | 71% | Moderate |
+| LLM05: Supply Chain | 14% | Improving |
+| LLM02, LLM03, LLM07 | 0-14% | In Development |
+
+Tested on 10 real-world repos: LangChain, LlamaIndex, vLLM, OpenAI Python, Haystack, LiteLLM, DSPy, Guidance, Semantic Kernel, Text Gen WebUI (14,991 files, 6,668 findings).
+
 ## Features
 
 - **Static Code Analysis**: Scan Python codebases for OWASP LLM Top 10 vulnerabilities
@@ -13,6 +36,7 @@ A unified command-line tool for AI/LLM security scanning and testing. Combines s
 - **Multiple Providers**: Support for OpenAI, Anthropic, AWS Bedrock, Google Vertex AI, Azure OpenAI, Ollama, and custom endpoints
 - **Interactive HTML Reports**: Modern reports with tabbed interface, dark mode, severity filtering, and pagination
 - **SARIF Output**: CI/CD integration with GitHub Code Scanning, Azure DevOps, VS Code, and more
+- **Configurable**: YAML config files, environment variables, per-category thresholds, test file handling
 - **4-Factor Confidence Scoring**: Advanced confidence calculation for accurate vulnerability assessment
 
 ## Installation
@@ -30,6 +54,53 @@ pip install ai-security-cli[dev]
 # Full installation with all features
 pip install ai-security-cli[all]
 ```
+
+## Configuration
+
+### Config File (.ai-security.yaml)
+
+Create a `.ai-security.yaml` file in your project root:
+
+```yaml
+# Scan mode: recall (high sensitivity) or strict (higher thresholds)
+mode: recall
+
+# Deduplication: exact (merge duplicates) or off
+dedup: exact
+
+# Directories to exclude
+exclude_dirs:
+  - vendor
+  - third_party
+  - node_modules
+
+# Test file handling
+exclude_tests: false
+demote_tests: true
+test_confidence_penalty: 0.25
+
+# Per-category confidence thresholds
+thresholds:
+  LLM01: 0.70
+  LLM02: 0.70
+  LLM05: 0.80
+  LLM06: 0.75
+
+# Global threshold (used if category not specified)
+global_threshold: 0.70
+```
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `AISEC_MODE` | Scan mode | `recall` or `strict` |
+| `AISEC_DEDUP` | Deduplication | `exact` or `off` |
+| `AISEC_EXCLUDE_DIRS` | Comma-separated dirs | `vendor,third_party` |
+| `AISEC_THRESHOLD` | Global threshold | `0.70` |
+| `AISEC_THRESHOLD_LLM01` | Per-category threshold | `0.80` |
+
+**Precedence:** CLI flags > Environment variables > .ai-security.yaml > Defaults
 
 ## Quick Start
 
@@ -269,6 +340,12 @@ ai-security-cli scan <path> [OPTIONS]
 | `-c, --confidence` | Minimum confidence threshold (0.0-1.0) | 0.7 |
 | `--category` | Filter by OWASP category (LLM01-LLM10) | all |
 | `--audit/--no-audit` | Include security posture audit in HTML reports | true |
+| `--config` | Path to .ai-security.yaml config file | auto-detect |
+| `--mode` | Scan mode: recall (sensitive) or strict (precise) | recall |
+| `--dedup` | Deduplication: exact (merge) or off | exact |
+| `--exclude-dir` | Directories to exclude (repeatable) | - |
+| `--exclude-tests` | Skip test files entirely | false |
+| `--demote-tests` | Reduce confidence for test file findings | true |
 | `-v, --verbose` | Enable verbose output | false |
 
 **Examples:**
