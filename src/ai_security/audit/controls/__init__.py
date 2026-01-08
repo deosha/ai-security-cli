@@ -9,6 +9,10 @@ from .data_privacy import DataPrivacyControls
 from .owasp_llm import OWASPLLMControls
 from .blue_team import BlueTeamControls
 from .governance import GovernanceControls
+from .supply_chain import SupplyChainControls
+from .hallucination import HallucinationControls
+from .ethical_ai import EthicalAIControls
+from .incident_response import IncidentResponseControls
 
 __all__ = [
     "BaseControlDetector",
@@ -18,4 +22,8 @@ __all__ = [
     "OWASPLLMControls",
     "BlueTeamControls",
     "GovernanceControls",
+    "SupplyChainControls",
+    "HallucinationControls",
+    "EthicalAIControls",
+    "IncidentResponseControls",
 ]

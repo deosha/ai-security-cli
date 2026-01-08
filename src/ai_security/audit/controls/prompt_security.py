@@ -344,6 +344,207 @@ class ContextProtectionDetector(BaseControlDetector):
         )
 
 
+class RedTeamTestingDetector(BaseControlDetector):
+    """Detect red team testing for prompts."""
+
+    control_id = "PS-06"
+    control_name = "Red Team Testing"
+    category = "prompt_security"
+    description = "Adversarial testing of prompts using red team tools"
+    recommendations = [
+        "Use garak or promptfoo for automated prompt testing",
+        "Implement regular red team exercises for LLM prompts",
+        "Document and track prompt vulnerabilities found",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for red team testing tools
+        red_team_tools = ["garak", "promptfoo", "promptbench", "textattack"]
+        for tool in red_team_tools:
+            if self.deps.has_package(tool):
+                evidence_items.append(self._evidence_from_dependency(
+                    "", tool, f"Red team testing tool {tool} found"
+                ))
+
+        # Check for config files for these tools
+        config_files = ["garak.yaml", "promptfoo.yaml", ".promptfoo"]
+        for config_file in config_files:
+            if self.config.file_exists(config_file):
+                evidence_items.append(self._evidence_from_config(
+                    config_file, "config", "exists",
+                    f"Red team config file {config_file} found"
+                ))
+
+        # Check for adversarial testing patterns in code
+        test_patterns = ["adversarial_test", "red_team", "attack_prompt", "jailbreak_test"]
+        for pattern in test_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Red team testing: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class AnomalyDetectionDetector(BaseControlDetector):
+    """Detect anomaly detection on prompts."""
+
+    control_id = "PS-07"
+    control_name = "Prompt Anomaly Detection"
+    category = "prompt_security"
+    description = "Detection of anomalous or malicious prompts"
+    recommendations = [
+        "Implement statistical analysis on prompt patterns",
+        "Use ML-based anomaly detection for unusual inputs",
+        "Set up alerts for prompt anomaly detection",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for anomaly detection libraries
+        anomaly_libs = ["pyod", "alibi-detect", "sklearn"]
+        for lib in anomaly_libs:
+            if self.deps.has_package(lib):
+                # Check for anomaly-related usage
+                anomaly_patterns = ["anomaly", "outlier", "IsolationForest", "LocalOutlierFactor"]
+                for pattern in anomaly_patterns:
+                    matches = self.ast.find_function_calls(pattern)
+                    if matches:
+                        evidence_items.append(self._evidence_from_dependency(
+                            "", lib, f"Anomaly detection via {lib}"
+                        ))
+                        break
+
+        # Check for anomaly detection patterns
+        detect_patterns = [
+            "detect_anomaly", "is_anomalous", "anomaly_score",
+            "suspicious_prompt", "malicious_input"
+        ]
+        for pattern in detect_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Anomaly detection: {match.name}"
+                ))
+
+        # Check for statistical checks on prompts
+        stat_patterns = ["z_score", "standard_deviation", "threshold"]
+        for pattern in stat_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Statistical analysis: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class SystemPromptProtectionDetector(BaseControlDetector):
+    """Detect system prompt protection controls."""
+
+    control_id = "PS-08"
+    control_name = "System Prompt Protection"
+    category = "prompt_security"
+    description = "Protection of system prompts from extraction or override"
+    recommendations = [
+        "Never expose system prompts in error messages or logs",
+        "Implement instruction hierarchy to prevent override",
+        "Monitor for system prompt extraction attempts",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for system prompt protection patterns
+        protection_patterns = [
+            "system_prompt", "SYSTEM_PROMPT", "instruction_hierarchy",
+            "protect_system", "hide_instructions"
+        ]
+        for pattern in protection_patterns:
+            # Check environment variables
+            config_matches = self.config.find_key(pattern)
+            for match in config_matches[:2]:
+                evidence_items.append(self._evidence_from_config(
+                    match.file_path, match.key, "[PROTECTED]",
+                    "System prompt stored securely in config"
+                ))
+
+        # Check for extraction prevention patterns
+        prevent_patterns = [
+            "ignore.*previous", "do not reveal", "never disclose",
+            "instruction.*override"
+        ]
+        for pattern in prevent_patterns:
+            matches = self.ast.find_string_literals(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    "System prompt protection instruction"
+                ))
+
+        # Check for secrets management usage for prompts
+        secrets_patterns = ["secrets.", "vault.", "ssm.", "getenv"]
+        for pattern in secrets_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                if "prompt" in str(match.context).lower():
+                    evidence_items.append(self._evidence_from_ast(
+                        match.file_path, match.line_number, match.snippet,
+                        f"Secure prompt storage: {match.name}"
+                    ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
 class PromptSecurityControls(ControlCategory):
     """Prompt security control category."""
 
@@ -358,4 +559,7 @@ class PromptSecurityControls(ControlCategory):
             InputValidationDetector(self.ast, self.config, self.deps),
             OutputFilteringDetector(self.ast, self.config, self.deps),
             ContextProtectionDetector(self.ast, self.config, self.deps),
+            RedTeamTestingDetector(self.ast, self.config, self.deps),
+            AnomalyDetectionDetector(self.ast, self.config, self.deps),
+            SystemPromptProtectionDetector(self.ast, self.config, self.deps),
         ]

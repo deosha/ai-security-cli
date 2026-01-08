@@ -15,6 +15,10 @@ from .controls import (
     OWASPLLMControls,
     BlueTeamControls,
     GovernanceControls,
+    SupplyChainControls,
+    HallucinationControls,
+    EthicalAIControls,
+    IncidentResponseControls,
 )
 from .models import AuditResult, CategoryScore, ControlEvidence
 from .scoring import MaturityScorer
@@ -123,6 +127,18 @@ class AuditEngine:
                 self.ast_analyzer, self.config_analyzer, self.dependency_analyzer
             ),
             GovernanceControls(
+                self.ast_analyzer, self.config_analyzer, self.dependency_analyzer
+            ),
+            SupplyChainControls(
+                self.ast_analyzer, self.config_analyzer, self.dependency_analyzer
+            ),
+            HallucinationControls(
+                self.ast_analyzer, self.config_analyzer, self.dependency_analyzer
+            ),
+            EthicalAIControls(
+                self.ast_analyzer, self.config_analyzer, self.dependency_analyzer
+            ),
+            IncidentResponseControls(
                 self.ast_analyzer, self.config_analyzer, self.dependency_analyzer
             ),
         ]

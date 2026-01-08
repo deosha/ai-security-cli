@@ -7,7 +7,7 @@ A unified command-line tool for AI/LLM security scanning and testing. Combines s
 ## Features
 
 - **Static Code Analysis**: Scan Python codebases for OWASP LLM Top 10 vulnerabilities
-- **Security Posture Audit**: Auto-detect security controls and generate maturity scores across 6 categories
+- **Security Posture Audit**: Auto-detect security controls and generate maturity scores across 10 categories (61 controls)
 - **Live Model Testing**: Test live LLM models for security vulnerabilities via API
 - **Remote Repository Scanning**: Scan GitHub, GitLab, and Bitbucket repositories directly via URL
 - **Multiple Providers**: Support for OpenAI, Anthropic, AWS Bedrock, Google Vertex AI, Azure OpenAI, Ollama, and custom endpoints
@@ -79,8 +79,8 @@ The HTML reports include a modern, interactive interface:
 │  ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐                   │
 │  │  STATIC ANALYSIS  │ │  SECURITY AUDIT   │ │   LIVE TESTING    │                   │
 │  │                   │ │                   │ │                   │                   │
-│  │ • AST Parser      │ │ • 35 Controls     │ │ • 7 LLM Providers │                   │
-│  │ • 10 OWASP Detect │ │ • 6 Categories    │ │ • 11 Detectors    │                   │
+│  │ • AST Parser      │ │ • 61 Controls     │ │ • 7 LLM Providers │                   │
+│  │ • 10 OWASP Detect │ │ • 10 Categories   │ │ • 11 Detectors    │                   │
 │  │ • 7 Scorers       │ │ • Maturity Score  │ │ • 4-Factor Conf.  │                   │
 │  └─────────┬─────────┘ └─────────┬─────────┘ └─────────┬─────────┘                   │
 │            │                     │                     │                              │
@@ -298,7 +298,7 @@ ai-security-cli scan ./project -o html --no-audit -f vuln-only.html
 
 ### Security Posture Audit (`audit`)
 
-Evaluate security controls and maturity level of your codebase. Detects 35 security controls across 6 categories.
+Evaluate security controls and maturity level of your codebase. Detects 61 security controls across 10 categories.
 
 ```bash
 ai-security-cli audit <path> [OPTIONS]
@@ -316,12 +316,16 @@ ai-security-cli audit <path> [OPTIONS]
 
 | Category | Controls | Description |
 |----------|----------|-------------|
-| Prompt Security | 6 | Input validation, sanitization, injection prevention |
-| Model Security | 6 | Rate limiting, access controls, model protection |
-| Data Privacy | 6 | PII detection, encryption, data anonymization |
-| OWASP LLM Top 10 | 6 | Coverage of OWASP LLM security controls |
-| Blue Team Operations | 6 | Logging, monitoring, alerting, incident response |
+| Prompt Security | 8 | Input validation, sanitization, injection prevention, red teaming |
+| Model Security | 8 | Rate limiting, access controls, model protection, differential privacy |
+| Data Privacy | 8 | PII detection, encryption, data anonymization, GDPR compliance |
+| OWASP LLM Top 10 | 10 | Coverage of OWASP LLM security controls |
+| Blue Team Operations | 7 | Logging, monitoring, alerting, drift detection |
 | Governance | 5 | Compliance, documentation, audit trails |
+| Supply Chain | 3 | Dependency scanning, model provenance, integrity verification |
+| Hallucination Mitigation | 5 | RAG implementation, confidence scoring, fact checking |
+| Ethical AI & Bias | 4 | Fairness metrics, explainability, bias testing, model cards |
+| Incident Response | 3 | Monitoring integration, audit logging, rollback capability |
 
 **Maturity Levels:**
 

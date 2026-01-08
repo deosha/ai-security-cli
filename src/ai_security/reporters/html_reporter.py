@@ -809,19 +809,29 @@ class HTMLReporter(BaseReporter):
         .category-card {
             background: var(--bg-tertiary);
             border-radius: 16px;
-            padding: 20px;
             border: 1px solid var(--border-color);
             transition: all 0.3s;
+            overflow: hidden;
         }
         .category-card:hover {
-            transform: translateY(-4px);
             box-shadow: var(--card-shadow);
         }
         .category-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            padding: 20px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .category-header:hover {
+            background: var(--bg-secondary);
+        }
+        .category-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
         .category-name {
             font-weight: 600;
@@ -833,22 +843,38 @@ class HTMLReporter(BaseReporter):
             color: var(--accent-primary);
             font-size: 1.2em;
         }
+        .accordion-icon {
+            width: 20px;
+            height: 20px;
+            transition: transform 0.3s ease;
+            color: var(--text-muted);
+        }
+        .category-card.open .accordion-icon {
+            transform: rotate(180deg);
+        }
         .category-progress {
-            height: 8px;
+            height: 4px;
             background: var(--border-color);
-            border-radius: 4px;
             overflow: hidden;
-            margin-bottom: 16px;
         }
         .category-progress-fill {
             height: 100%;
             background: var(--accent-gradient);
-            border-radius: 4px;
             animation: progressFill 1s ease-out forwards;
             transform-origin: left;
         }
+        .category-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .category-card.open .category-content {
+            max-height: 2000px;
+            transition: max-height 0.5s ease-in;
+        }
         .control-list {
             list-style: none;
+            padding: 0 20px 20px;
         }
         .control-item {
             display: flex;
@@ -880,6 +906,54 @@ class HTMLReporter(BaseReporter):
         .status-missing::before { content: "✗"; }
         .status-partial { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; }
         .status-partial::before { content: "~"; }
+        .category-stats {
+            display: flex;
+            gap: 16px;
+            padding: 12px 20px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .stat-dot.detected { background: #059669; }
+        .stat-dot.partial { background: #d97706; }
+        .stat-dot.missing { background: #dc2626; }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0 16px;
+        }
+        .section-header h3 {
+            margin: 0;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--accent-primary);
+            padding-bottom: 8px;
+        }
+        .expand-toggle {
+            font-size: 0.8rem;
+            color: var(--accent-primary);
+            cursor: pointer;
+            padding: 4px 12px;
+            border: 1px solid var(--accent-primary);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            transition: all 0.2s;
+        }
+        .expand-toggle:hover {
+            background: var(--accent-primary);
+            color: white;
+        }
 
         .recommendations-section {
             margin-top: 32px;
@@ -1539,7 +1613,10 @@ class HTMLReporter(BaseReporter):
             </div>
         </div>
 
-        <h3 style="margin: 20px 0 16px; color: #1e293b; border-bottom: 2px solid #667eea; padding-bottom: 8px;">Category Scores</h3>
+        <div class="section-header">
+            <h3 style="color: var(--text-primary); border-bottom: 2px solid var(--accent-primary); padding-bottom: 8px;">Category Scores</h3>
+            <button class="expand-toggle" id="toggle-categories" onclick="toggleAllCategories()">Expand All</button>
+        </div>
         <div class="category-grid">
         """
 
@@ -1618,13 +1695,26 @@ class HTMLReporter(BaseReporter):
         return content
 
     def _render_audit_category_card(self, cat: Any) -> str:
-        """Render a single audit category card."""
+        """Render a single audit category card with accordion."""
         controls_html = ""
+        detected_count = 0
+        partial_count = 0
+        missing_count = 0
+
         for control in cat.controls:
-            status_class = "status-detected" if control.detected else "status-missing"
-            if control.detected and control.score < 50:
-                status_class = "status-partial"
-            status_text = control.level.value.title() if control.detected else "Missing"
+            if control.detected:
+                if control.score >= 50:
+                    detected_count += 1
+                    status_class = "status-detected"
+                    status_text = control.level.value.title()
+                else:
+                    partial_count += 1
+                    status_class = "status-partial"
+                    status_text = "Partial"
+            else:
+                missing_count += 1
+                status_class = "status-missing"
+                status_text = "Missing"
 
             controls_html += f"""
             <li class="control-item">
@@ -1633,18 +1723,34 @@ class HTMLReporter(BaseReporter):
             </li>
             """
 
+        accordion_icon = """<svg class="accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>"""
+
         return f"""
         <div class="category-card">
-            <div class="category-header">
-                <span class="category-name">{html.escape(cat.category_name)}</span>
-                <span class="category-score">{cat.score:.0f}/100</span>
+            <div class="category-header" onclick="toggleCategory(this)">
+                <div class="category-header-left">
+                    <span class="category-name">{html.escape(cat.category_name)}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="category-score">{cat.score:.0f}/100</span>
+                    {accordion_icon}
+                </div>
             </div>
             <div class="category-progress">
                 <div class="category-progress-fill" style="width: {cat.percentage}%"></div>
             </div>
-            <ul class="control-list">
-                {controls_html}
-            </ul>
+            <div class="category-content">
+                <ul class="control-list">
+                    {controls_html}
+                </ul>
+                <div class="category-stats">
+                    <span class="stat-item"><span class="stat-dot detected"></span> {detected_count} Detected</span>
+                    <span class="stat-item"><span class="stat-dot partial"></span> {partial_count} Partial</span>
+                    <span class="stat-item"><span class="stat-dot missing"></span> {missing_count} Missing</span>
+                </div>
+            </div>
         </div>
         """
 
@@ -2346,5 +2452,29 @@ class HTMLReporter(BaseReporter):
             });
 
             updateFindingsLoadMoreButton();
+        }
+
+        // Category accordion functionality
+        function toggleCategory(header) {
+            const card = header.parentElement;
+            card.classList.toggle('open');
+        }
+
+        function toggleAllCategories() {
+            const cards = document.querySelectorAll('.category-card');
+            const btn = document.getElementById('toggle-categories');
+            const allOpen = [...cards].every(card => card.classList.contains('open'));
+
+            cards.forEach(card => {
+                if (allOpen) {
+                    card.classList.remove('open');
+                } else {
+                    card.classList.add('open');
+                }
+            });
+
+            if (btn) {
+                btn.textContent = allOpen ? 'Expand All' : 'Collapse All';
+            }
         }
         """

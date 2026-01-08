@@ -337,6 +337,172 @@ class ModelSourceVerificationDetector(BaseControlDetector):
         )
 
 
+class DifferentialPrivacyDetector(BaseControlDetector):
+    """Detect differential privacy implementation."""
+
+    control_id = "MS-06"
+    control_name = "Differential Privacy"
+    category = "model_security"
+    description = "Differential privacy for model training and inference"
+    recommendations = [
+        "Use Opacus or TensorFlow Privacy for differential privacy",
+        "Implement privacy budgets for model queries",
+        "Monitor epsilon values for privacy guarantees",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for differential privacy libraries
+        dp_libs = ["opacus", "tensorflow-privacy", "diffprivlib", "pydp"]
+        for lib in dp_libs:
+            if self.deps.has_package(lib):
+                evidence_items.append(self._evidence_from_dependency(
+                    "", lib, f"Differential privacy library {lib} found"
+                ))
+
+        # Check for DP patterns in code
+        dp_patterns = ["PrivacyEngine", "epsilon", "privacy_budget", "differential_privacy", "dp_"]
+        for pattern in dp_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Differential privacy: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class ModelWatermarkingDetector(BaseControlDetector):
+    """Detect model watermarking for IP protection."""
+
+    control_id = "MS-07"
+    control_name = "Model Watermarking"
+    category = "model_security"
+    description = "Watermarking for model intellectual property protection"
+    recommendations = [
+        "Implement watermarking for model outputs",
+        "Use cryptographic watermarks for model weights",
+        "Track watermark verification for model theft detection",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for watermarking libraries/patterns
+        watermark_patterns = [
+            "watermark", "model_signature", "embed_watermark",
+            "extract_watermark", "verify_watermark"
+        ]
+        for pattern in watermark_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Watermarking: {match.name}"
+                ))
+
+        # Check for text watermarking
+        text_watermark_libs = ["watermark-gpt", "text-watermark"]
+        for lib in text_watermark_libs:
+            if self.deps.has_package(lib):
+                evidence_items.append(self._evidence_from_dependency(
+                    "", lib, f"Text watermarking library {lib} found"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 2:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class SecureModelLoadingDetector(BaseControlDetector):
+    """Detect secure model loading practices."""
+
+    control_id = "MS-08"
+    control_name = "Secure Model Loading"
+    category = "model_security"
+    description = "Safe loading of model files to prevent code execution"
+    recommendations = [
+        "Use safetensors instead of pickle for model weights",
+        "Set weights_only=True when using torch.load",
+        "Validate model files before loading",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for safetensors library
+        if self.deps.has_package("safetensors"):
+            evidence_items.append(self._evidence_from_dependency(
+                "", "safetensors", "Safe model loading library safetensors found"
+            ))
+
+        # Check for safe loading patterns
+        safe_patterns = ["safetensors", "weights_only=True", "safe_load"]
+        for pattern in safe_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Safe loading: {match.name}"
+                ))
+
+        # Check for torch.load without weights_only (negative pattern)
+        unsafe_patterns = self.ast.find_function_calls("torch.load")
+        unsafe_count = 0
+        for match in unsafe_patterns:
+            if "weights_only" not in match.snippet:
+                unsafe_count += 1
+
+        if unsafe_count == 0 and unsafe_patterns:
+            evidence_items.append(self._evidence_from_ast(
+                "", 0, "", "All torch.load calls use safe parameters"
+            ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 2:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
 class ModelSecurityControls(ControlCategory):
     """Model security control category."""
 
@@ -351,4 +517,7 @@ class ModelSecurityControls(ControlCategory):
             DependencyScanningDetector(self.ast, self.config, self.deps),
             APISecurityDetector(self.ast, self.config, self.deps),
             ModelSourceVerificationDetector(self.ast, self.config, self.deps),
+            DifferentialPrivacyDetector(self.ast, self.config, self.deps),
+            ModelWatermarkingDetector(self.ast, self.config, self.deps),
+            SecureModelLoadingDetector(self.ast, self.config, self.deps),
         ]

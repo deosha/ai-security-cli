@@ -304,6 +304,124 @@ class IncidentResponseDetector(BaseControlDetector):
         )
 
 
+class ModelDriftMonitoringDetector(BaseControlDetector):
+    """Detect model drift monitoring."""
+
+    control_id = "BT-06"
+    control_name = "Model Drift Monitoring"
+    category = "blue_team"
+    description = "Monitoring for model drift and automatic retraining triggers"
+    recommendations = [
+        "Use Evidently or alibi-detect for drift monitoring",
+        "Set up automated alerts for significant drift",
+        "Implement automatic retraining pipelines",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for drift detection libraries
+        drift_libs = ["evidently", "alibi-detect", "nannyml", "deepchecks"]
+        for lib in drift_libs:
+            if self.deps.has_package(lib):
+                evidence_items.append(self._evidence_from_dependency(
+                    "", lib, f"Drift monitoring library {lib} found"
+                ))
+
+        # Check for drift detection patterns
+        drift_patterns = [
+            "drift", "distribution_shift", "data_drift", "concept_drift",
+            "DriftReport", "DataDriftTab"
+        ]
+        for pattern in drift_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Drift monitoring: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 2:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class DataQualityMonitoringDetector(BaseControlDetector):
+    """Detect data quality monitoring."""
+
+    control_id = "BT-07"
+    control_name = "Data Quality Monitoring"
+    category = "blue_team"
+    description = "Monitoring input data quality for AI systems"
+    recommendations = [
+        "Use Great Expectations for data validation",
+        "Implement data quality checks in pipeline",
+        "Set up alerts for data quality issues",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for data quality libraries
+        quality_libs = ["great_expectations", "pandera", "cerberus", "pydantic"]
+        for lib in quality_libs:
+            if self.deps.has_package(lib):
+                evidence_items.append(self._evidence_from_dependency(
+                    "", lib, f"Data quality library {lib} found"
+                ))
+
+        # Check for data validation patterns
+        validation_patterns = [
+            "validate_data", "data_quality", "expect_column", "DataContract",
+            "check_data", "quality_check"
+        ]
+        for pattern in validation_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Data quality check: {match.name}"
+                ))
+
+        # Check for Great Expectations usage
+        ge_patterns = ["ExpectationSuite", "expect_", "checkpoint"]
+        for pattern in ge_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Great Expectations: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
 class BlueTeamControls(ControlCategory):
     """AI Blue Team Operations control category."""
 
@@ -318,4 +436,6 @@ class BlueTeamControls(ControlCategory):
             AnomalyDetectionDetector(self.ast, self.config, self.deps),
             AdversarialDetectionDetector(self.ast, self.config, self.deps),
             IncidentResponseDetector(self.ast, self.config, self.deps),
+            ModelDriftMonitoringDetector(self.ast, self.config, self.deps),
+            DataQualityMonitoringDetector(self.ast, self.config, self.deps),
         ]

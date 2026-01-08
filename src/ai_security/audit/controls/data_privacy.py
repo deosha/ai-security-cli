@@ -318,6 +318,182 @@ class ConsentManagementDetector(BaseControlDetector):
         )
 
 
+class NERPIIDetectionDetector(BaseControlDetector):
+    """Detect NER-based PII detection."""
+
+    control_id = "DP-06"
+    control_name = "NER PII Detection"
+    category = "data_privacy"
+    description = "Named Entity Recognition for PII detection"
+    recommendations = [
+        "Use Presidio or SpaCy for NER-based PII detection",
+        "Implement custom NER models for domain-specific PII",
+        "Run PII detection on all inputs and outputs",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for NER/PII libraries
+        ner_libs = ["presidio_analyzer", "presidio-analyzer", "spacy", "flair", "transformers"]
+        for lib in ner_libs:
+            if self.deps.has_package(lib):
+                # Verify NER usage
+                ner_patterns = ["NER", "ner", "named_entity", "EntityRecognizer", "presidio"]
+                for pattern in ner_patterns:
+                    matches = self.ast.find_function_calls(pattern)
+                    if matches:
+                        evidence_items.append(self._evidence_from_dependency(
+                            "", lib, f"NER PII detection via {lib}"
+                        ))
+                        break
+
+        # Check for Presidio usage
+        presidio_patterns = ["AnalyzerEngine", "AnonymizerEngine", "presidio"]
+        for pattern in presidio_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Presidio PII detection: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 2:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class DataRetentionPolicyDetector(BaseControlDetector):
+    """Detect data retention policies."""
+
+    control_id = "DP-07"
+    control_name = "Data Retention Policy"
+    category = "data_privacy"
+    description = "Policies and implementation for data retention and deletion"
+    recommendations = [
+        "Define data retention policies for AI training data",
+        "Implement automated data deletion after retention period",
+        "Maintain data inventory with retention metadata",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for retention config
+        retention_patterns = ["retention", "ttl", "expire", "delete_after", "data_lifecycle"]
+        for pattern in retention_patterns:
+            config_matches = self.config.find_key(pattern)
+            for match in config_matches[:2]:
+                evidence_items.append(self._evidence_from_config(
+                    match.file_path, match.key, str(match.value),
+                    f"Data retention config: {match.key}"
+                ))
+
+        # Check for deletion/cleanup code
+        cleanup_patterns = ["cleanup", "purge", "delete_old", "expire_data", "retention"]
+        for pattern in cleanup_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"Data cleanup: {match.name}"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
+class GDPRComplianceDetector(BaseControlDetector):
+    """Detect GDPR/privacy compliance implementations."""
+
+    control_id = "DP-08"
+    control_name = "GDPR Compliance"
+    category = "data_privacy"
+    description = "User rights implementation (access, deletion, portability)"
+    recommendations = [
+        "Implement data export functionality for user requests",
+        "Provide data deletion capabilities (right to be forgotten)",
+        "Maintain records of data processing activities",
+    ]
+
+    def detect(self) -> ControlEvidence:
+        evidence_items: List[EvidenceItem] = []
+
+        # Check for GDPR-related patterns
+        gdpr_patterns = [
+            "export_data", "delete_user_data", "data_portability",
+            "right_to_be_forgotten", "data_subject_request", "gdpr"
+        ]
+        for pattern in gdpr_patterns:
+            matches = self.ast.find_function_calls(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    f"GDPR compliance: {match.name}"
+                ))
+
+        # Check config for GDPR settings
+        config_patterns = ["gdpr", "privacy", "data_subject", "user_rights"]
+        for pattern in config_patterns:
+            config_matches = self.config.find_key(pattern)
+            for match in config_matches[:2]:
+                evidence_items.append(self._evidence_from_config(
+                    match.file_path, match.key, str(match.value),
+                    f"Privacy config: {match.key}"
+                ))
+
+        # Check for API endpoints related to user rights
+        endpoint_patterns = ["/export", "/delete", "/privacy", "/data-request"]
+        for pattern in endpoint_patterns:
+            matches = self.ast.find_string_literals(pattern)
+            for match in matches[:2]:
+                evidence_items.append(self._evidence_from_ast(
+                    match.file_path, match.line_number, match.snippet,
+                    "User rights endpoint detected"
+                ))
+
+        # Determine level
+        if not evidence_items:
+            level = ControlLevel.NONE
+        elif len(evidence_items) >= 3:
+            level = ControlLevel.ADVANCED
+        elif len(evidence_items) >= 1:
+            level = ControlLevel.INTERMEDIATE
+        else:
+            level = ControlLevel.BASIC
+
+        return self._create_evidence(
+            detected=len(evidence_items) > 0,
+            level=level,
+            evidence_items=evidence_items,
+        )
+
+
 class DataPrivacyControls(ControlCategory):
     """Data privacy control category."""
 
@@ -332,4 +508,7 @@ class DataPrivacyControls(ControlCategory):
             EncryptionDetector(self.ast, self.config, self.deps),
             AuditLoggingDetector(self.ast, self.config, self.deps),
             ConsentManagementDetector(self.ast, self.config, self.deps),
+            NERPIIDetectionDetector(self.ast, self.config, self.deps),
+            DataRetentionPolicyDetector(self.ast, self.config, self.deps),
+            GDPRComplianceDetector(self.ast, self.config, self.deps),
         ]
