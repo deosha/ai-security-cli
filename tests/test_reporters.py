@@ -221,7 +221,7 @@ class TestSARIFReporter:
         assert "driver" in run["tool"]
 
         driver = run["tool"]["driver"]
-        assert driver["name"] == "ai-security-cli"
+        assert driver["name"] == "aisentry"
         assert "rules" in driver
 
     def test_sarif_rules_owasp_mapping(self):
