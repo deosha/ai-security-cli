@@ -1,4 +1,4 @@
-# AI Security CLI
+# aisentry
 
 [![Tests](https://github.com/deosha/aisentry/actions/workflows/test.yml/badge.svg)](https://github.com/deosha/aisentry/actions/workflows/test.yml)
 [![PyPI version](https://badge.fury.io/py/aisentry.svg)](https://pypi.org/project/aisentry/)
@@ -13,7 +13,7 @@ A unified command-line tool for AI/LLM security scanning and testing. Combines s
 
 Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth vulnerabilities.
 
-| Metric | AI Security CLI | Semgrep | Bandit |
+| Metric | aisentry | Semgrep | Bandit |
 |--------|-----------------|---------|--------|
 | **Precision** | 68.5% | 83.3% | 58.3% |
 | **Recall** | 50.7% | 6.8% | 38.4% |
@@ -35,7 +35,7 @@ Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth 
 | LLM02: Insecure Output | 35.3% | 42.9% | **81.8%** |
 | LLM07: Insecure Plugin | 71.4% | 25.0% | **83.3%** |
 
-> **Note**: Semgrep/Bandit are general-purpose SAST tools not designed for LLM patterns. Use AI Security CLI + Bandit together for comprehensive coverage. See [llm-sec-eval](https://github.com/deosha/llm-sec-eval) for methodology and limitations.
+> **Note**: Semgrep/Bandit are general-purpose SAST tools not designed for LLM patterns. Use aisentry + Bandit together for comprehensive coverage. See [llm-sec-eval](https://github.com/deosha/llm-sec-eval) for methodology and limitations.
 
 ## Features
 
@@ -59,7 +59,7 @@ pip install garak
 garak --model_type openai --model_name gpt-4 --probes all
 ```
 
-AI Security CLI focuses on **static code analysis** - finding vulnerabilities in your source code before deployment. Garak complements this by testing the **runtime behavior** of deployed models.
+aisentry focuses on **static code analysis** - finding vulnerabilities in your source code before deployment. Garak complements this by testing the **runtime behavior** of deployed models.
 
 ## Installation
 
@@ -79,9 +79,9 @@ pip install aisentry[all]
 
 ## Configuration
 
-### Config File (.ai-security.yaml)
+### Config File (.aisentry.yaml)
 
-Create a `.ai-security.yaml` file in your project root:
+Create a `.aisentry.yaml` file in your project root:
 
 ```yaml
 # Scan mode: recall (high sensitivity) or strict (higher thresholds)
@@ -122,7 +122,7 @@ global_threshold: 0.70
 | `AISEC_THRESHOLD` | Global threshold | `0.70` |
 | `AISEC_THRESHOLD_LLM01` | Per-category threshold | `0.80` |
 
-**Precedence:** CLI flags > Environment variables > .ai-security.yaml > Defaults
+**Precedence:** CLI flags > Environment variables > .aisentry.yaml > Defaults
 
 ## Quick Start
 
@@ -161,7 +161,7 @@ The HTML reports include a modern, interactive interface:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                                  AI SECURITY CLI                                      │
+│                                     AISENTRY                                          │
 ├──────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                       │
 │  ┌────────────────┐    ┌────────────────┐    ┌────────────────┐                      │
@@ -362,7 +362,7 @@ aisentry scan <path> [OPTIONS]
 | `-c, --confidence` | Minimum confidence threshold (0.0-1.0) | 0.7 |
 | `--category` | Filter by OWASP category (LLM01-LLM10) | all |
 | `--audit/--no-audit` | Include security posture audit in HTML reports | true |
-| `--config` | Path to .ai-security.yaml config file | auto-detect |
+| `--config` | Path to .aisentry.yaml config file | auto-detect |
 | `--mode` | Scan mode: recall (sensitive) or strict (precise) | recall |
 | `--dedup` | Deduplication: exact (merge) or off | exact |
 | `--exclude-dir` | Directories to exclude (repeatable) | - |
@@ -546,7 +546,7 @@ aisentry test -p ollama -m llama2 --mode standard
 ### GitHub Actions
 
 ```yaml
-name: AI Security Scan
+name: aisentry Security Scan
 on: [push, pull_request]
 jobs:
   security-scan:
@@ -569,8 +569,8 @@ jobs:
 repos:
   - repo: local
     hooks:
-      - id: ai-security-scan
-        name: AI Security Scan
+      - id: aisentry-scan
+        name: aisentry Security Scan
         entry: aisentry scan
         language: system
         types: [python]

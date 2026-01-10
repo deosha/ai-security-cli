@@ -1,4 +1,4 @@
-"""Utility modules for AI Security CLI"""
+"""Utility modules for aisentry."""
 
 from .ast_utils import (
     LLM_API_METHODS,

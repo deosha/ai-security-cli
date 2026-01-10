@@ -1,4 +1,4 @@
-"""Data models for AI Security CLI"""
+"""Data models for aisentry."""
 
 from .finding import Confidence, Finding, Severity
 from .result import CategoryScore, ScanResult, TestResult, UnifiedResult

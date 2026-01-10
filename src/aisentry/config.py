@@ -1,8 +1,8 @@
 """
-Configuration management for AI Security CLI
+Configuration management for aisentry.
 
 Supports configuration from multiple sources with precedence:
-CLI flags > Environment variables > .ai-security.yaml > Built-in defaults
+CLI flags > Environment variables > .aisentry.yaml > Built-in defaults
 
 Environment variables:
 - AISEC_MODE: recall|strict
@@ -80,7 +80,8 @@ class ScanConfig:
 
 def find_config_file(start_path: Optional[Path] = None) -> Optional[Path]:
     """
-    Find .ai-security.yaml in current directory or parents.
+    Find .aisentry.yaml in current directory or parents.
+    Also supports legacy .ai-security.yaml for backwards compatibility.
 
     Args:
         start_path: Starting directory (defaults to cwd)
@@ -93,16 +94,20 @@ def find_config_file(start_path: Optional[Path] = None) -> Optional[Path]:
 
     current = start_path.resolve()
 
+    # Config file names in order of preference
+    config_names = [
+        '.aisentry.yaml',
+        '.aisentry.yml',
+        '.ai-security.yaml',  # Legacy support
+        '.ai-security.yml',   # Legacy support
+    ]
+
     # Search up to root
     while current != current.parent:
-        config_file = current / '.ai-security.yaml'
-        if config_file.exists():
-            return config_file
-
-        # Also check for .ai-security.yml
-        config_file = current / '.ai-security.yml'
-        if config_file.exists():
-            return config_file
+        for config_name in config_names:
+            config_file = current / config_name
+            if config_file.exists():
+                return config_file
 
         current = current.parent
 
@@ -114,7 +119,7 @@ def load_yaml_config(config_path: Path) -> Dict[str, Any]:
     Load configuration from YAML file.
 
     Args:
-        config_path: Path to .ai-security.yaml
+        config_path: Path to .aisentry.yaml
 
     Returns:
         Configuration dictionary
@@ -215,7 +220,7 @@ def load_config(
     """
     Load configuration with full precedence chain.
 
-    Precedence: CLI flags > env vars > .ai-security.yaml > defaults
+    Precedence: CLI flags > env vars > .aisentry.yaml > defaults
 
     Args:
         cli_options: Options from CLI flags

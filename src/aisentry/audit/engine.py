@@ -188,7 +188,7 @@ class AuditEngine:
         """Print audit summary to console."""
         print()
         print("=" * 60)
-        print("AI SECURITY AUDIT REPORT")
+        print("AISENTRY AUDIT REPORT")
         print("=" * 60)
         print()
         print(f"Project: {result.project_path}")

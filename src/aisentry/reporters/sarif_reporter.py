@@ -519,8 +519,8 @@ class SARIFReporter(BaseReporter):
             return "unknown"
 
         # Remove temp directory prefixes for cleaner paths
-        if "/ai-security-scan-" in path:
-            parts = path.split("/ai-security-scan-")
+        if "/aisentry-scan-" in path:
+            parts = path.split("/aisentry-scan-")
             if len(parts) > 1:
                 # Get everything after the temp dir name
                 remaining = parts[1]

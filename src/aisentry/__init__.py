@@ -1,11 +1,11 @@
 """
-AI Security CLI - Unified AI/LLM Security Scanner
+aisentry - Unified AI/LLM Security Scanner
 
 Static Code Analysis + Live Model Testing for AI/LLM Security
 """
 
 __version__ = "1.0.0"
-__author__ = "AI Security CLI Team"
+__author__ = "AISentry Team"
 
 from aisentry.models.finding import Confidence, Finding, Severity
 from aisentry.models.result import ScanResult, TestResult, UnifiedResult

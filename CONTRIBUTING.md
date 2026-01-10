@@ -1,6 +1,6 @@
-# Contributing to AI Security CLI
+# Contributing to aisentry
 
-Thank you for your interest in contributing to AI Security CLI! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing to aisentry! This document provides guidelines and information for contributors.
 
 ## Ways to Contribute
 
@@ -187,4 +187,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for helping make AI Security CLI better!
+Thank you for helping make aisentry better!

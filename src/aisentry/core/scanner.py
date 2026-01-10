@@ -76,7 +76,7 @@ def normalize_git_url(url: str) -> str:
 
 def clone_repository(url: str, depth: int = 1) -> Tuple[str, bool]:
     """Clone a remote Git repository to a temporary directory."""
-    temp_dir = tempfile.mkdtemp(prefix="ai-security-scan-")
+    temp_dir = tempfile.mkdtemp(prefix="aisentry-scan-")
 
     try:
         normalized_url = normalize_git_url(url)
@@ -122,7 +122,7 @@ class StaticScanner:
     4. Report: Generate results matching schema
 
     Configuration:
-    - Supports .ai-security.yaml config files
+    - Supports .aisentry.yaml config files
     - Per-category confidence thresholds
     - Configurable deduplication (exact, off)
     - Opt-in directory exclusions

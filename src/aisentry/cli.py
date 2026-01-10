@@ -1,5 +1,5 @@
 """
-AI Security CLI - Command line interface for AI security scanning and testing
+aisentry - Command line interface for AI security scanning and testing.
 """
 
 import asyncio
@@ -38,7 +38,7 @@ def setup_logging(verbose: bool):
 @click.version_option(version="1.0.0b1", prog_name="aisentry")
 def main():
     """
-    AI Security CLI - Security scanning and testing for AI/LLM applications.
+    aisentry - Security scanning and testing for AI/LLM applications.
 
     Commands:
 
@@ -93,7 +93,7 @@ def main():
 @click.option(
     "--config",
     type=click.Path(exists=True),
-    help="Path to .ai-security.yaml config file",
+    help="Path to .aisentry.yaml config file",
 )
 @click.option(
     "--dedup",
@@ -189,13 +189,13 @@ def scan(
     # Show appropriate panel
     if is_remote_url(path):
         console.print(Panel.fit(
-            "[bold blue]AI Security CLI[/bold blue] - Remote Repository Scan",
+            "[bold blue]aisentry[/bold blue] - Remote Repository Scan",
             border_style="blue",
         ))
         console.print(f"\n[cyan]Repository:[/cyan] {path}")
     else:
         console.print(Panel.fit(
-            "[bold blue]AI Security CLI[/bold blue] - Static Code Analysis",
+            "[bold blue]aisentry[/bold blue] - Static Code Analysis",
             border_style="blue",
         ))
 
@@ -444,7 +444,7 @@ def test(
     setup_logging(verbose)
 
     console.print(Panel.fit(
-        "[bold blue]AI Security CLI[/bold blue] - Live Model Testing",
+        "[bold blue]aisentry[/bold blue] - Live Model Testing",
         border_style="blue",
     ))
 
@@ -632,13 +632,13 @@ def audit(
     # Show appropriate panel
     if is_remote:
         console.print(Panel.fit(
-            "[bold blue]AI Security CLI[/bold blue] - Remote Repository Audit",
+            "[bold blue]aisentry[/bold blue] - Remote Repository Audit",
             border_style="blue",
         ))
         console.print(f"\n[cyan]Repository:[/cyan] {path}")
     else:
         console.print(Panel.fit(
-            "[bold blue]AI Security CLI[/bold blue] - Security Posture Audit",
+            "[bold blue]aisentry[/bold blue] - Security Posture Audit",
             border_style="blue",
         ))
 
