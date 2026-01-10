@@ -19,7 +19,7 @@ Findings without dynamic execution confirmers are demoted to LOW/INFO (advisory)
 
 import logging
 import re
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List
 
 from ai_security.models.finding import Finding, Severity
 from ai_security.static_detectors.base_detector import BaseDetector

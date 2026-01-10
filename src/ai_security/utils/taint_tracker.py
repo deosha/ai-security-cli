@@ -21,7 +21,6 @@ from ai_security.utils.ast_utils import (
     get_call_name,
     names_in_expr,
     resolve_single_hop,
-    find_assignments_in_scope,
 )
 
 

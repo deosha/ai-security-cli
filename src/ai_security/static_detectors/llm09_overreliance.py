@@ -17,7 +17,7 @@ with "payment" in name but no actual payment execution).
 """
 
 import re
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List
 
 from ai_security.models.finding import Severity
 from ai_security.static_detectors.base_detector import BaseDetector, Finding
@@ -346,7 +346,7 @@ class OverrelianceDetector(BaseDetector):
                     description=(
                         f"Function '{func.get('name')}' on line {func_start} makes critical {', '.join(decision_types)} "
                         f"decisions based on LLM output without human oversight or verification. "
-                        + (f"Action edges detected (HTTP/file/DB/subprocess) - risk of automated execution."
+                        + ("Action edges detected (HTTP/file/DB/subprocess) - risk of automated execution."
                            if action_edges.get('any') else
                            "No action edges detected - advisory only.")
                     ),
@@ -442,7 +442,7 @@ class OverrelianceDetector(BaseDetector):
                     description=(
                         f"Function '{func.get('name')}' on line {func_start} automatically executes actions "
                         f"based on LLM output without checking confidence thresholds or validating output. "
-                        + (f"Action edges detected - risk of automated execution."
+                        + ("Action edges detected - risk of automated execution."
                            if action_edges.get('any') else
                            "No action edges detected - advisory only.")
                     ),

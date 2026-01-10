@@ -27,8 +27,8 @@ from ai_security.utils.taint_tracker import (
     TaintTracker,
     TaintSource,
     TaintSink,
+    TaintFlow,
     SinkType,
-    FlowType,
     calculate_flow_confidence,
 )
 
