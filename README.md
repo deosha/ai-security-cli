@@ -10,26 +10,27 @@ Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth 
 
 | Metric | AI Security CLI | Semgrep | Bandit |
 |--------|-----------------|---------|--------|
-| **Precision** | 69.6% | 66.7% | 51.5% |
-| **Recall** | 53.4% | 8.2% | 46.6% |
-| **F1 Score** | **60.5%** | 14.6% | 48.9% |
+| **Precision** | 68.5% | 83.3% | 58.3% |
+| **Recall** | 50.7% | 6.8% | 38.4% |
+| **F1 Score** | **58.3%** | 12.7% | 46.3% |
 
-**Per-Category Detection (Recall):**
+**LLM-Specific Coverage** (patterns generic tools can't detect):
 
-| Category | Recall | Precision | F1 |
-|----------|--------|-----------|-----|
-| LLM07: Insecure Plugin | 85.7% | 85.7% | 85.7% |
-| LLM06: Sensitive Info | 71.4% | 55.6% | 62.5% |
-| LLM04: Model DoS | 66.7% | 100% | 80.0% |
-| LLM09: Overreliance | 66.7% | 100% | 80.0% |
-| LLM05: Supply Chain | 60.0% | 54.5% | 57.1% |
-| LLM01: Prompt Injection | 50.0% | 75.0% | 60.0% |
-| LLM10: Model Theft | 42.9% | 75.0% | 54.5% |
-| LLM03: Training Poisoning | 40.0% | 100% | 57.1% |
-| LLM08: Excessive Agency | 33.3% | 100% | 50.0% |
-| LLM02: Insecure Output | 30.0% | 42.9% | 35.3% |
+| Category | AI-Sec F1 | Semgrep | Bandit |
+|----------|-----------|---------|--------|
+| LLM01: Prompt Injection | 60.0% | 0% | 15.4% |
+| LLM04: Model DoS | 80.0% | 0% | 0% |
+| LLM06: Sensitive Info | 62.5% | 0% | 0% |
+| LLM10: Model Theft | 44.4% | 0% | 0% |
 
-AI Security CLI outperforms both Semgrep and Bandit on F1 score by detecting LLM-specific vulnerabilities that generic tools miss.
+**General Patterns** (where generic tools excel):
+
+| Category | AI-Sec F1 | Semgrep | Bandit |
+|----------|-----------|---------|--------|
+| LLM02: Insecure Output | 35.3% | 42.9% | **81.8%** |
+| LLM07: Insecure Plugin | 71.4% | 25.0% | **83.3%** |
+
+> **Note**: Semgrep/Bandit are general-purpose SAST tools not designed for LLM patterns. Use AI Security CLI + Bandit together for comprehensive coverage. See [llm-sec-eval](https://github.com/deosha/llm-sec-eval) for methodology and limitations.
 
 ## Features
 
