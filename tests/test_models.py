@@ -2,7 +2,6 @@
 Unit tests for aisentry models (Finding, ScanResult, CategoryScore).
 """
 
-import pytest
 from datetime import datetime
 
 from aisentry.models.finding import Confidence, Finding, Severity

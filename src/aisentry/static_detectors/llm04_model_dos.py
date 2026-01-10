@@ -232,7 +232,6 @@ class ModelDOSDetector(BaseDetector):
         - Looks for 'for ' and 'while ' at statement level (after indentation)
         - Avoids false positives from comments containing loop-related words
         """
-        import re
 
         for llm_call in llm_calls:
             llm_line = llm_call.get('line', 0)

@@ -1,6 +1,5 @@
 """Tests for static detectors (LLM01, LLM02)."""
 
-import pytest
 import tempfile
 import os
 from aisentry.parsers.python.ast_parser import PythonASTParser

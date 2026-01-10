@@ -6,10 +6,8 @@ import os
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from aisentry.config import (
-    DEFAULT_CONFIG,
     ScanConfig,
     find_config_file,
     load_config,

@@ -12,7 +12,6 @@ from aisentry.audit.models import (
     AuditResult, CategoryScore, ControlEvidence, ControlLevel,
     EvidenceItem, EvidenceType, MaturityLevel, Recommendation
 )
-from aisentry.audit.scoring.maturity_scorer import MaturityScorer
 from aisentry.audit.analyzers.ast_analyzer import ASTAnalyzer
 from aisentry.audit.analyzers.config_analyzer import ConfigAnalyzer
 from aisentry.audit.analyzers.dependency_analyzer import DependencyAnalyzer

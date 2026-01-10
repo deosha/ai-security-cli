@@ -1,9 +1,7 @@
 """Tests for the Python AST parser."""
 
-import pytest
 import tempfile
 import os
-from pathlib import Path
 
 from aisentry.parsers.python.ast_parser import PythonASTParser
 
