@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-security-cli"
-version = "1.0.0b5"
+version = "1.0.0b6"
 description = "Unified AI/LLM Security Scanner - Static Code Analysis + Live Model Testing"
 readme = "README.md"
 requires-python = ">=3.8"
