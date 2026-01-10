@@ -137,7 +137,20 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --cov=aisentry --cov-report=xml --cov-report=term-missing"
+addopts = "-v --cov=aisentry --cov-report=xml --cov-report=term"
+
+[tool.coverage.run]
+omit = [
+    "src/aisentry/live_detectors/*",
+    "src/aisentry/providers/*",
+    "src/aisentry/core/tester.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+]
 
 [tool.pytest-asyncio]
 mode = "auto"
