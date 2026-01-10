@@ -15,25 +15,20 @@ Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth 
 
 | Metric | aisentry | Semgrep | Bandit |
 |--------|-----------------|---------|--------|
-| **Precision** | 68.5% | 83.3% | 58.3% |
-| **Recall** | 50.7% | 6.8% | 38.4% |
-| **F1 Score** | **58.3%** | 12.7% | 46.3% |
+| **Precision** | 75.4% | 83.3% | 58.3% |
+| **Recall** | 63.0% | 6.8% | 38.4% |
+| **F1 Score** | **68.7%** | 12.7% | 46.3% |
 
 **LLM-Specific Coverage** (patterns generic tools can't detect):
 
-| Category | AI-Sec F1 | Semgrep | Bandit |
+| Category | aisentry F1 | Semgrep | Bandit |
 |----------|-----------|---------|--------|
-| LLM01: Prompt Injection | 60.0% | 0% | 15.4% |
+| LLM01: Prompt Injection | 72.7% | 0% | 15.4% |
+| LLM02: Insecure Output | 73.7% | 42.9% | 81.8% |
 | LLM04: Model DoS | 80.0% | 0% | 0% |
 | LLM06: Sensitive Info | 62.5% | 0% | 0% |
+| LLM07: Insecure Plugin | 93.3% | 25.0% | 83.3% |
 | LLM10: Model Theft | 44.4% | 0% | 0% |
-
-**General Patterns** (where generic tools excel):
-
-| Category | AI-Sec F1 | Semgrep | Bandit |
-|----------|-----------|---------|--------|
-| LLM02: Insecure Output | 35.3% | 42.9% | **81.8%** |
-| LLM07: Insecure Plugin | 71.4% | 25.0% | **83.3%** |
 
 > **Note**: Semgrep/Bandit are general-purpose SAST tools not designed for LLM patterns. Use aisentry + Bandit together for comprehensive coverage. See [llm-sec-eval](https://github.com/deosha/llm-sec-eval) for methodology and limitations.
 
