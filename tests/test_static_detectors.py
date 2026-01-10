@@ -264,23 +264,26 @@ def rate_limited_call(user_input):
         findings = detector.detect(parsed)
         assert isinstance(findings, list)
 
-    def test_untargeted_skips_no_rate_limiting(self, detector):
-        """Test that untargeted mode (default) doesn't report missing rate limiting without loop."""
+    def test_untargeted_skips_few_missing_controls(self, detector):
+        """Test that untargeted mode skips functions with only 1-2 missing controls."""
         code = '''
 from openai import OpenAI
 client = OpenAI()
 
-def simple_function(user_input):
-    # No rate limiting, but also no loop - should be quiet in untargeted mode
+def function_with_some_protection(user_input):
+    # Has timeout and max_tokens, only missing rate limiting
+    # Should not trigger in untargeted mode (fewer than 3 risks)
     response = client.chat.completions.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": user_input}]
+        messages=[{"role": "user", "content": user_input}],
+        max_tokens=500,
+        timeout=30
     )
     return response.choices[0].message.content
 '''
         parsed = parse_code(code)
         findings = detector.detect(parsed)
-        # In untargeted mode without loop evidence, no findings should be reported
+        # With only 1-2 missing controls, untargeted mode should not report
         assert len(findings) == 0
 
     def test_targeted_reports_no_rate_limiting(self, targeted_detector):

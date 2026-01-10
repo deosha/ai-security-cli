@@ -151,15 +151,15 @@ class ModelDOSDetector(BaseDetector):
 
             # Reporting logic:
             # - When targeted: Report any risks (user explicitly asked for DoS detection)
-            # - When not targeted: Only report if multiple risks OR loop evidence
-            #   This reduces noise from "single missing control" in general scans
+            # - When not targeted: Only report if loop evidence OR multiple missing controls
+            #   This reduces noise from "missing one control" in general scans
             should_report = False
             if self.targeted:
                 should_report = len(risks) > 0
             else:
                 # In general scans, require either:
                 # 1. Loop evidence (high-confidence DoS)
-                # 2. Multiple missing controls (3+ risks indicates systemic issue)
+                # 2. Multiple missing controls (3+ risks indicates systemic DoS vulnerability)
                 should_report = has_loop_evidence or len(risks) >= 3
 
             if should_report:
