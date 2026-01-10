@@ -4,11 +4,11 @@ import json
 import pytest
 from datetime import datetime
 
-from ai_security.reporters.json_reporter import JSONReporter
-from ai_security.reporters.sarif_reporter import SARIFReporter
-from ai_security.models.result import ScanResult, TestResult, UnifiedResult, CategoryScore
-from ai_security.models.finding import Finding, Severity
-from ai_security.models.vulnerability import LiveVulnerability
+from aisentry.reporters.json_reporter import JSONReporter
+from aisentry.reporters.sarif_reporter import SARIFReporter
+from aisentry.models.result import ScanResult, TestResult, UnifiedResult, CategoryScore
+from aisentry.models.finding import Finding, Severity
+from aisentry.models.vulnerability import LiveVulnerability
 
 
 def create_sample_scan_result():

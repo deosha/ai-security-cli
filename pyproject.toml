@@ -3,15 +3,15 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai-security-cli"
-version = "1.0.0b6"
-description = "Unified AI/LLM Security Scanner - Static Code Analysis + Live Model Testing"
+name = "aisentry"
+version = "1.0.0b1"
+description = "AI Sentry - Unified AI/LLM Security Scanner for Static Code Analysis + Live Model Testing"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
-keywords = ["security", "llm", "ai", "owasp", "static-analysis", "live-testing", "vulnerability-scanner"]
+keywords = ["security", "llm", "ai", "owasp", "static-analysis", "live-testing", "vulnerability-scanner", "aisentry"]
 authors = [
-    {name = "AI Security CLI Team"}
+    {name = "AISentry Team"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -55,9 +55,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://aisentry.co"
-Repository = "https://github.com/deosha/ai-security-cli"
+Repository = "https://github.com/deosha/aisentry"
 Documentation = "https://aisentry.co/docs.html"
-Issues = "https://github.com/deosha/ai-security-cli/issues"
+Issues = "https://github.com/deosha/aisentry/issues"
 
 [project.optional-dependencies]
 # AWS Bedrock support
@@ -113,7 +113,7 @@ all = [
 ]
 
 [project.scripts]
-ai-security-cli = "ai_security.cli:main"
+aisentry = "aisentry.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -137,7 +137,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --cov=ai_security --cov-report=xml --cov-report=term-missing"
+addopts = "-v --cov=aisentry --cov-report=xml --cov-report=term-missing"
 
 [tool.pytest-asyncio]
 mode = "auto"

@@ -5,7 +5,7 @@ import tempfile
 import os
 from pathlib import Path
 
-from ai_security.parsers.python.ast_parser import PythonASTParser
+from aisentry.parsers.python.ast_parser import PythonASTParser
 
 
 def create_temp_file(code: str) -> str:

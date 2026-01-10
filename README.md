@@ -60,16 +60,16 @@ AI Security CLI focuses on **static code analysis** - finding vulnerabilities in
 
 ```bash
 # Basic installation
-pip install ai-security-cli
+pip install aisentry
 
 # With cloud provider support
-pip install ai-security-cli[cloud]
+pip install aisentry[cloud]
 
 # Development installation
-pip install ai-security-cli[dev]
+pip install aisentry[dev]
 
 # Full installation with all features
-pip install ai-security-cli[all]
+pip install aisentry[all]
 ```
 
 ## Configuration
@@ -123,20 +123,20 @@ global_threshold: 0.70
 
 ```bash
 # Static code analysis (local)
-ai-security-cli scan ./my_project
+aisentry scan ./my_project
 
 # Static code analysis (remote GitHub repository)
-ai-security-cli scan https://github.com/langchain-ai/langchain
+aisentry scan https://github.com/langchain-ai/langchain
 
 # Generate HTML report with Security Posture audit (default)
-ai-security-cli scan ./my_project -o html -f security_report.html
+aisentry scan ./my_project -o html -f security_report.html
 
 # Security posture audit only
-ai-security-cli audit ./my_project
+aisentry audit ./my_project
 
 # Live model testing
 export OPENAI_API_KEY=sk-...
-ai-security-cli test -p openai -m gpt-4 --mode quick
+aisentry test -p openai -m gpt-4 --mode quick
 ```
 
 ## HTML Report Features
@@ -294,7 +294,7 @@ The HTML reports include a modern, interactive interface:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           ai_security package                                    │
+│                           aisentry package                                    │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
@@ -334,7 +334,7 @@ The HTML reports include a modern, interactive interface:
 Scan Python code for OWASP LLM Top 10 vulnerabilities. Supports local files/directories and remote Git repositories.
 
 ```bash
-ai-security-cli scan <path> [OPTIONS]
+aisentry scan <path> [OPTIONS]
 ```
 
 **Path Options:**
@@ -369,25 +369,25 @@ ai-security-cli scan <path> [OPTIONS]
 
 ```bash
 # Scan a local project directory
-ai-security-cli scan ./my_llm_app
+aisentry scan ./my_llm_app
 
 # Scan with JSON output
-ai-security-cli scan ./app.py -o json -f results.json
+aisentry scan ./app.py -o json -f results.json
 
 # Scan for high severity issues only
-ai-security-cli scan ./project -s high
+aisentry scan ./project -s high
 
 # Scan specific OWASP categories
-ai-security-cli scan ./project --category LLM01 --category LLM02
+aisentry scan ./project --category LLM01 --category LLM02
 
 # Generate HTML report
-ai-security-cli scan ./project -o html -f security_report.html
+aisentry scan ./project -o html -f security_report.html
 
 # Scan a GitHub repository directly
-ai-security-cli scan https://github.com/langchain-ai/langchain
+aisentry scan https://github.com/langchain-ai/langchain
 
 # Generate HTML without security posture audit
-ai-security-cli scan ./project -o html --no-audit -f vuln-only.html
+aisentry scan ./project -o html --no-audit -f vuln-only.html
 ```
 
 ### Security Posture Audit (`audit`)
@@ -395,7 +395,7 @@ ai-security-cli scan ./project -o html --no-audit -f vuln-only.html
 Evaluate security controls and maturity level of your codebase. Detects 61 security controls across 10 categories.
 
 ```bash
-ai-security-cli audit <path> [OPTIONS]
+aisentry audit <path> [OPTIONS]
 ```
 
 **Options:**
@@ -435,13 +435,13 @@ ai-security-cli audit <path> [OPTIONS]
 
 ```bash
 # Audit a local project
-ai-security-cli audit ./my_project
+aisentry audit ./my_project
 
 # Generate HTML audit report
-ai-security-cli audit ./project -o html -f audit-report.html
+aisentry audit ./project -o html -f audit-report.html
 
 # Audit a GitHub repository
-ai-security-cli audit https://github.com/user/repo -o json
+aisentry audit https://github.com/user/repo -o json
 ```
 
 ### Live Model Testing (`test`)
@@ -449,7 +449,7 @@ ai-security-cli audit https://github.com/user/repo -o json
 Test live LLM models for security vulnerabilities.
 
 ```bash
-ai-security-cli test [OPTIONS]
+aisentry test [OPTIONS]
 ```
 
 **Options:**
@@ -483,17 +483,17 @@ ai-security-cli test [OPTIONS]
 ```bash
 # Quick test with OpenAI
 export OPENAI_API_KEY=sk-...
-ai-security-cli test -p openai -m gpt-4 --mode quick
+aisentry test -p openai -m gpt-4 --mode quick
 
 # Comprehensive test with Anthropic
 export ANTHROPIC_API_KEY=...
-ai-security-cli test -p anthropic -m claude-3-opus --mode comprehensive
+aisentry test -p anthropic -m claude-3-opus --mode comprehensive
 
 # Test specific vulnerabilities
-ai-security-cli test -p openai -m gpt-4 -t prompt-injection -t jailbreak
+aisentry test -p openai -m gpt-4 -t prompt-injection -t jailbreak
 
 # Test with Ollama (local)
-ai-security-cli test -p ollama -m llama2 --mode standard
+aisentry test -p ollama -m llama2 --mode standard
 ```
 
 ## OWASP LLM Top 10 Coverage
@@ -551,8 +551,8 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install ai-security-cli
-      - run: ai-security-cli scan . -o sarif -f results.sarif
+      - run: pip install aisentry
+      - run: aisentry scan . -o sarif -f results.sarif
       - uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: results.sarif
@@ -566,7 +566,7 @@ repos:
     hooks:
       - id: ai-security-scan
         name: AI Security Scan
-        entry: ai-security-cli scan
+        entry: aisentry scan
         language: system
         types: [python]
         args: ['-s', 'high']
@@ -575,10 +575,10 @@ repos:
 ## Development
 
 ```bash
-git clone https://github.com/deosha/ai-security-cli.git
-cd ai-security-cli
+git clone https://github.com/deosha/aisentry.git
+cd aisentry
 pip install -e ".[dev]"
-pytest tests/ -v --cov=ai_security
+pytest tests/ -v --cov=aisentry
 ```
 
 ## License
@@ -588,6 +588,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Links
 
 - **Website**: [aisentry.co](https://aisentry.co)
-- **GitHub**: [github.com/deosha/ai-security-cli](https://github.com/deosha/ai-security-cli)
-- **PyPI**: [pypi.org/project/ai-security-cli](https://pypi.org/project/ai-security-cli/)
-- **Issues**: [Report bugs](https://github.com/deosha/ai-security-cli/issues)
+- **GitHub**: [github.com/deosha/aisentry](https://github.com/deosha/aisentry)
+- **PyPI**: [pypi.org/project/aisentry](https://pypi.org/project/aisentry/)
+- **Issues**: [Report bugs](https://github.com/deosha/aisentry/issues)

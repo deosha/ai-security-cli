@@ -24,8 +24,8 @@ Thank you for your interest in contributing to AI Security CLI! This document pr
 
 ```bash
 # Clone the repository
-git clone https://github.com/deosha/ai-security-cli.git
-cd ai-security-cli
+git clone https://github.com/deosha/aisentry.git
+cd aisentry
 
 # Create virtual environment
 python3 -m venv venv
@@ -45,8 +45,8 @@ black --check src/
 ## Project Structure
 
 ```
-ai-security-cli/
-├── src/ai_security/
+aisentry/
+├── src/aisentry/
 │   ├── cli.py                 # CLI entry point
 │   ├── config.py              # Configuration management
 │   ├── core/
@@ -66,7 +66,7 @@ ai-security-cli/
 
 ## Adding a New Static Detector
 
-1. Create a new file in `src/ai_security/static_detectors/`:
+1. Create a new file in `src/aisentry/static_detectors/`:
 
 ```python
 # llm99_new_category.py
@@ -89,7 +89,7 @@ class LLM99NewCategoryDetector(BaseDetector):
         return findings
 ```
 
-2. Register it in `src/ai_security/static_detectors/__init__.py`
+2. Register it in `src/aisentry/static_detectors/__init__.py`
 
 3. Add tests in `tests/static_detectors/test_llm99.py`
 
@@ -123,7 +123,7 @@ pytest tests/ -v
 pytest tests/static_detectors/test_llm01.py -v
 
 # Run with coverage
-pytest tests/ -v --cov=ai_security --cov-report=html
+pytest tests/ -v --cov=aisentry --cov-report=html
 
 # Validate against testbed
 cd ../llm-sec-eval

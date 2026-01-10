@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests/ -v --cov=ai_security --cov-report=xml
+          pytest tests/ -v --cov=aisentry --cov-report=xml
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11'

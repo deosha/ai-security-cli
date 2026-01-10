@@ -3,10 +3,10 @@
 import pytest
 import tempfile
 import os
-from ai_security.parsers.python.ast_parser import PythonASTParser
-from ai_security.static_detectors.llm01_prompt_injection import PromptInjectionDetector
-from ai_security.static_detectors.llm02_insecure_output import InsecureOutputDetector
-from ai_security.models.finding import Severity
+from aisentry.parsers.python.ast_parser import PythonASTParser
+from aisentry.static_detectors.llm01_prompt_injection import PromptInjectionDetector
+from aisentry.static_detectors.llm02_insecure_output import InsecureOutputDetector
+from aisentry.models.finding import Severity
 
 
 def create_temp_file(code: str) -> str:
