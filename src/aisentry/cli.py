@@ -448,6 +448,20 @@ def test(
         border_style="blue",
     ))
 
+    # Recommend garak for comprehensive live testing
+    console.print()
+    console.print(Panel(
+        "[yellow]Recommendation:[/yellow] For comprehensive LLM red-teaming and live testing, "
+        "we recommend [bold cyan]garak[/bold cyan] - a dedicated LLM vulnerability scanner.\n\n"
+        "[dim]Install:[/dim] pip install garak\n"
+        "[dim]GitHub:[/dim] https://github.com/NVIDIA/garak\n\n"
+        "[dim]aisentry's live testing provides basic coverage. garak offers 100+ probes across "
+        "many attack categories with active development.[/dim]",
+        title="[yellow]Live Testing Note[/yellow]",
+        border_style="yellow",
+    ))
+    console.print()
+
     # Create provider
     try:
         provider_class = PROVIDER_MAP[provider]
