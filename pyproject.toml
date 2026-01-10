@@ -119,20 +119,28 @@ ai-security-cli = "ai_security.cli:main"
 where = ["src"]
 
 [tool.black]
-line-length = 100
+line-length = 120
 target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
 
 [tool.ruff]
-line-length = 100
-select = ["E", "F", "I", "N", "W"]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # Line too long - handled by formatter
+    "F841",  # Local variable assigned but never used
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-asyncio_mode = "auto"
-addopts = "-v --cov=ai_security --cov-report=html --cov-report=term-missing"
+addopts = "-v --cov=ai_security --cov-report=xml --cov-report=term-missing"
+
+[tool.pytest-asyncio]
+mode = "auto"
 
 [tool.mypy]
 python_version = "3.8"

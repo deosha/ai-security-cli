@@ -1,8 +1,8 @@
 """Data models for AI Security CLI"""
 
-from .finding import Finding, Severity, Confidence
-from .vulnerability import LiveVulnerability, LiveTestResult
-from .result import ScanResult, TestResult, UnifiedResult, CategoryScore
+from .finding import Confidence, Finding, Severity
+from .result import CategoryScore, ScanResult, TestResult, UnifiedResult
+from .vulnerability import LiveTestResult, LiveVulnerability
 
 __all__ = [
     "Finding",

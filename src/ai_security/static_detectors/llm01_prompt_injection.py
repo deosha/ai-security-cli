@@ -10,21 +10,17 @@ Detects unsafe embedding of user input into LLM prompts using:
 
 import ast
 import logging
-from typing import Dict, List, Any, Set, Optional, Tuple
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set
 
-from ai_security.static_detectors.base_detector import BaseDetector
 from ai_security.models.finding import Finding, Severity
+from ai_security.static_detectors.base_detector import BaseDetector
 from ai_security.utils.ast_utils import (
-    names_in_expr,
-    names_in_fstring,
-    is_sanitization_call,
-    is_prompt_template_usage,
-    resolve_single_hop,
-    extract_dict_content_names,
-    is_passthrough_call,
     get_full_call_name,
-    LLM_SINK_KEYWORDS,
+    is_prompt_template_usage,
+    is_sanitization_call,
+    names_in_expr,
+    resolve_single_hop,
 )
 
 logger = logging.getLogger(__name__)

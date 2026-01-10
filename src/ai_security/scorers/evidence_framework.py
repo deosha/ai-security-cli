@@ -5,9 +5,9 @@ Provides structured evidence collection and multi-signal scoring
 to reduce false positives in security control detection.
 """
 
-from typing import Dict, List, Any, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Dict, List
 
 
 class EvidenceStrength(Enum):

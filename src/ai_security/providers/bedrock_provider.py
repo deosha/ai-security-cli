@@ -1,11 +1,10 @@
 """AWS Bedrock provider implementation"""
 
-import os
 import json
-from typing import List, Dict, Any, Optional
 import logging
+from typing import Any, Dict, List, Optional
 
-from .base_provider import BaseProvider, LLMResponse, RateLimitError, ProviderError
+from .base_provider import BaseProvider, LLMResponse, ProviderError, RateLimitError
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
 """Base detector class - all static security detectors inherit from this"""
 
-from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
 import logging
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
 
-from ai_security.models.finding import Finding, Confidence
+from ai_security.models.finding import Confidence, Finding
 
 logger = logging.getLogger(__name__)
 

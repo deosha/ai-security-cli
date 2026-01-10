@@ -13,7 +13,7 @@ Each subcategory is scored 0-100 based on detected controls.
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 from ai_security.scorers.base_scorer import BaseScorer, CategoryScore
 
@@ -348,7 +348,7 @@ class EthicalAIScorer(BaseScorer):
         - Basic demographic checks (WEAK): 50
         - No evidence: 0
         """
-        from ai_security.scorers.evidence_framework import EvidenceCollector, EvidenceStrength
+        from ai_security.scorers.evidence_framework import EvidenceCollector
 
         collector = EvidenceCollector(parsed_data)
 
@@ -480,7 +480,6 @@ class EthicalAIScorer(BaseScorer):
         - 0: None detected
         """
         from ai_security.scorers.evidence_framework import EvidenceCollector
-        from ai_security.scorers.security_library_registry import SecurityLibraryRegistry
 
         collector = EvidenceCollector(parsed_data)
 

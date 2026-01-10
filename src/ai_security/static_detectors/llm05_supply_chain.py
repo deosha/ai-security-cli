@@ -11,10 +11,10 @@ Detects risks in the AI/ML supply chain:
 
 import logging
 import re
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
-from ai_security.static_detectors.base_detector import BaseDetector
 from ai_security.models.finding import Finding, Severity
+from ai_security.static_detectors.base_detector import BaseDetector
 
 logger = logging.getLogger(__name__)
 

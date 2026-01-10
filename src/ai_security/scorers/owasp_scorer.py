@@ -12,11 +12,11 @@ Scoring Logic:
 """
 
 import logging
-from typing import Dict, List, Any
 from collections import Counter
+from typing import Any, Dict, List
 
-from ai_security.scorers.base_scorer import BaseScorer, CategoryScore
 from ai_security.models.finding import Finding, Severity
+from ai_security.scorers.base_scorer import BaseScorer, CategoryScore
 
 logger = logging.getLogger(__name__)
 

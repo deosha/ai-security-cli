@@ -6,8 +6,8 @@ and other information-theoretic measures for security analysis.
 """
 
 import math
-from typing import Dict, List, Any, Optional
 from collections import Counter
+from typing import Dict, List
 
 
 def calculate_text_entropy(text: str) -> float:

@@ -1,9 +1,9 @@
 """Python AST parser - extracts structure from Python source code"""
 
 import ast
-from typing import Dict, List, Any, Optional
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Handle ast.unparse for Python 3.8 compatibility
 try:

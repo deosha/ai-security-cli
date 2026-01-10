@@ -10,14 +10,14 @@ Detects hardcoded secrets in code:
 Uses entropy analysis + pattern matching for high accuracy.
 """
 
-import re
 import logging
 import math
-from typing import Dict, List, Any, Set, Optional
+import re
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
-from ai_security.static_detectors.base_detector import BaseDetector
 from ai_security.models.finding import Finding, Severity
+from ai_security.static_detectors.base_detector import BaseDetector
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,9 @@
 """Anthropic provider implementation"""
 
-from typing import List, Dict, Any, Optional
 import logging
+from typing import List, Optional
 
-from .base_provider import BaseProvider, LLMResponse, RateLimitError, ProviderError
+from .base_provider import BaseProvider, LLMResponse, ProviderError, RateLimitError
 
 logger = logging.getLogger(__name__)
 

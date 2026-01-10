@@ -1,17 +1,19 @@
 """HTML reporter for security scan results"""
 
-from datetime import datetime
-from typing import List, Dict, Any, Optional
 import html
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from ai_security.models.result import ScanResult, TestResult, UnifiedResult
 from ai_security.models.finding import Finding, Severity
+from ai_security.models.result import ScanResult, TestResult, UnifiedResult
 from ai_security.models.vulnerability import LiveVulnerability
+
 from .base_reporter import BaseReporter
 
 # Import audit models (optional - may not be installed)
 try:
-    from ai_security.audit.models import AuditResult, CategoryScore as AuditCategoryScore
+    from ai_security.audit.models import AuditResult
+    from ai_security.audit.models import CategoryScore as AuditCategoryScore
     AUDIT_AVAILABLE = True
 except ImportError:
     AUDIT_AVAILABLE = False

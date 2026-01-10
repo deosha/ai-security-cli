@@ -5,10 +5,10 @@ Scorers calculate security posture scores (0-100) for framework categories,
 while Detectors find vulnerabilities.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
-import logging
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 

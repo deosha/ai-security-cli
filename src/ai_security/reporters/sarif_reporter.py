@@ -8,14 +8,13 @@ Specification: https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
 
 import json
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
-from urllib.parse import quote
+from typing import Any, Dict, List, Optional
 
-from ai_security.models.result import ScanResult, TestResult
 from ai_security.models.finding import Finding, Severity
+from ai_security.models.result import ScanResult, TestResult
 from ai_security.models.vulnerability import LiveVulnerability
-from .base_reporter import BaseReporter
 
+from .base_reporter import BaseReporter
 
 # SARIF severity level mapping
 SEVERITY_TO_SARIF_LEVEL = {

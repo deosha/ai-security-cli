@@ -6,9 +6,9 @@ Z-score calculation, anomaly detection, and confidence intervals.
 """
 
 import math
-from typing import Dict, List, Any, Optional, Tuple
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def calculate_mean(values: List[float]) -> float:

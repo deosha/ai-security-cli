@@ -14,7 +14,7 @@ Each subcategory is scored 0-100 based on detected controls.
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 from ai_security.scorers.base_scorer import BaseScorer, CategoryScore
 

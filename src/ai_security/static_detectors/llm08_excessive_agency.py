@@ -13,12 +13,11 @@ References:
 - OWASP LLM08: https://owasp.org/www-project-top-10-for-large-language-model-applications/
 """
 
-import ast
 import logging
-from typing import List, Dict, Any, Set
+from typing import Any, Dict, List
 
-from ai_security.static_detectors.base_detector import BaseDetector
 from ai_security.models.finding import Finding, Severity
+from ai_security.static_detectors.base_detector import BaseDetector
 
 logger = logging.getLogger(__name__)
 

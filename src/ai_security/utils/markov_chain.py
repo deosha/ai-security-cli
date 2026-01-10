@@ -8,9 +8,9 @@ Ported from genai-security JavaScript implementation.
 
 import math
 import re
-from typing import Dict, List, Any, Optional, Set, Tuple
-from dataclasses import dataclass, field
 from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Set
 
 
 @dataclass

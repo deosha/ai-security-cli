@@ -3,9 +3,9 @@ Dependency Analyzer for detecting security-related packages.
 """
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set
-from dataclasses import dataclass
 
 
 @dataclass

@@ -3,11 +3,11 @@
 import json
 from datetime import datetime
 from typing import Any, Dict, List
-from dataclasses import asdict
 
-from ai_security.models.result import ScanResult, TestResult, UnifiedResult
 from ai_security.models.finding import Finding, Severity
+from ai_security.models.result import ScanResult, TestResult, UnifiedResult
 from ai_security.models.vulnerability import LiveVulnerability
+
 from .base_reporter import BaseReporter
 
 

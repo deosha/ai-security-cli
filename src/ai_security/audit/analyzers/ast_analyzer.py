@@ -4,9 +4,9 @@ AST Analyzer for detecting code patterns.
 
 import ast
 import re
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 
 @dataclass

@@ -4,7 +4,8 @@ Category 4: Hallucination Detection & Mitigation Scorer
 Evaluates implementation of hallucination detection and mitigation controls.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from ai_security.scorers.base_scorer import BaseScorer, CategoryScore
 
 

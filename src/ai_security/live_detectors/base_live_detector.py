@@ -1,17 +1,17 @@
 """Base class for live model testing detectors"""
 
-import time
 import asyncio
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional
 import logging
+import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
 from ai_security.models.finding import Severity
-from ai_security.models.vulnerability import LiveVulnerability, LiveTestResult
+from ai_security.models.vulnerability import LiveTestResult, LiveVulnerability
 from ai_security.providers.base_provider import BaseProvider, LLMResponse
-from ai_security.utils.markov_chain import MarkovChainAnalyzer
 from ai_security.utils.entropy import EntropyBaseline
+from ai_security.utils.markov_chain import MarkovChainAnalyzer
 
 logger = logging.getLogger(__name__)
 

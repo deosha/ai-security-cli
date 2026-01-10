@@ -4,7 +4,7 @@ HTML reporter for audit results.
 
 from pathlib import Path
 
-from ..models import AuditResult, CategoryScore, ControlEvidence
+from ..models import AuditResult, CategoryScore
 
 
 class HTMLAuditReporter:

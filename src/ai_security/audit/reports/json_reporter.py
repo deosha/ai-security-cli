@@ -4,7 +4,6 @@ JSON reporter for audit results.
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from ..models import AuditResult
 

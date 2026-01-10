@@ -4,42 +4,40 @@ Static Code Scanner - Orchestrates parsing, detection, and scoring
 Supports configurable deduplication, per-category thresholds, and directory exclusions.
 """
 
-import os
-import re
-import time
-import shutil
 import logging
-import tempfile
+import re
+import shutil
 import subprocess
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
-from urllib.parse import urlparse
+import tempfile
+import time
 from collections import defaultdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
+from ai_security.config import ScanConfig
+from ai_security.models.finding import Finding, Severity
+from ai_security.models.result import CategoryScore, ScanResult
 from ai_security.parsers.python.ast_parser import PythonASTParser
-from ai_security.static_detectors import (
-    PromptInjectionDetector,
-    InsecureOutputDetector,
-    TrainingPoisoningDetector,
-    ModelDOSDetector,
-    SupplyChainDetector,
-    SecretsDetector,
-    InsecurePluginDetector,
-    ExcessiveAgencyDetector,
-    OverrelianceDetector,
-    ModelTheftDetector,
-)
-from ai_security.scorers.prompt_security_scorer import PromptSecurityScorer
-from ai_security.scorers.model_security_scorer import ModelSecurityScorer
 from ai_security.scorers.data_privacy_scorer import DataPrivacyScorer
-from ai_security.scorers.hallucination_scorer import HallucinationScorer
 from ai_security.scorers.ethical_ai_scorer import EthicalAIScorer
 from ai_security.scorers.governance_scorer import GovernanceScorer
+from ai_security.scorers.hallucination_scorer import HallucinationScorer
+from ai_security.scorers.model_security_scorer import ModelSecurityScorer
 from ai_security.scorers.owasp_scorer import OWASPScorer
-from ai_security.models.finding import Finding, Severity
-from ai_security.models.result import ScanResult, CategoryScore
-from ai_security.utils.scoring import calculate_overall_score, get_severity_counts
-from ai_security.config import ScanConfig, load_config
+from ai_security.scorers.prompt_security_scorer import PromptSecurityScorer
+from ai_security.static_detectors import (
+    ExcessiveAgencyDetector,
+    InsecureOutputDetector,
+    InsecurePluginDetector,
+    ModelDOSDetector,
+    ModelTheftDetector,
+    OverrelianceDetector,
+    PromptInjectionDetector,
+    SecretsDetector,
+    SupplyChainDetector,
+    TrainingPoisoningDetector,
+)
+from ai_security.utils.scoring import calculate_overall_score
 
 logger = logging.getLogger(__name__)
 

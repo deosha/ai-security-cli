@@ -5,7 +5,7 @@ Provides helper functions for AST-based taint tracking and analysis.
 """
 
 import ast
-from typing import Set, List, Dict, Any, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 
 def names_in_expr(node: ast.AST) -> Set[str]:

@@ -6,10 +6,10 @@ Ensures consistent scoring across all output formats.
 """
 
 import math
-from typing import List, Dict, Any, Optional, Tuple, Union
-from ai_security.models.finding import Finding, Severity
-from ai_security.models.result import CategoryScore
+from typing import Any, Dict, List, Optional, Tuple, Union
 
+from ai_security.models.finding import Finding
+from ai_security.models.result import CategoryScore
 
 # Risk level thresholds and colors
 RISK_LEVELS = [

@@ -2,25 +2,25 @@
 AI Security CLI - Command line interface for AI security scanning and testing
 """
 
-import sys
 import asyncio
 import logging
+import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 
+from ai_security.config import load_config
 from ai_security.core.scanner import StaticScanner, is_remote_url
-from ai_security.core.tester import LiveTester, DETECTOR_REGISTRY
-from ai_security.reporters.json_reporter import JSONReporter
+from ai_security.core.tester import DETECTOR_REGISTRY, LiveTester
+from ai_security.providers import PROVIDER_MAP
 from ai_security.reporters.html_reporter import HTMLReporter
+from ai_security.reporters.json_reporter import JSONReporter
 from ai_security.reporters.sarif_reporter import SARIFReporter
-from ai_security.providers import PROVIDER_MAP, get_available_providers
-from ai_security.config import load_config, ScanConfig
 
 console = Console()
 
@@ -271,9 +271,10 @@ def scan(
     audit_result = None
     if audit and output == "html":
         try:
+            import shutil
+
             from ai_security.audit import AuditEngine
             from ai_security.core.scanner import clone_repository
-            import shutil
 
             with Progress(
                 SpinnerColumn(),
@@ -599,9 +600,10 @@ def audit(
     setup_logging(verbose)
 
     # Import required modules
-    from ai_security.audit import AuditEngine
-    from ai_security.core.scanner import is_remote_url, clone_repository
     import shutil
+
+    from ai_security.audit import AuditEngine
+    from ai_security.core.scanner import clone_repository, is_remote_url
 
     # Validate path
     is_remote = is_remote_url(path)
@@ -640,7 +642,7 @@ def audit(
             task = progress.add_task("Cloning repository...", total=None)
             temp_dir, success = clone_repository(path)
             if not success:
-                console.print(f"[red]Error:[/red] Failed to clone repository")
+                console.print("[red]Error:[/red] Failed to clone repository")
                 console.print("\n[dim]Make sure git is installed and the repository URL is correct.[/dim]")
                 sys.exit(1)
             audit_path = Path(temp_dir)

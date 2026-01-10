@@ -1,8 +1,8 @@
 """Base reporter for security scan results"""
 
 from abc import ABC, abstractmethod
-from typing import Union, Optional
 from pathlib import Path
+from typing import Union
 
 from ai_security.models.result import ScanResult, TestResult, UnifiedResult
 

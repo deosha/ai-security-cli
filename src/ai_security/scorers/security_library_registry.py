@@ -5,7 +5,7 @@ Normalized mapping of known security libraries and their patterns.
 Used for evidence-based scoring to reduce false positives.
 """
 
-from typing import Dict, List, Set
+from typing import Dict, Set
 
 
 class SecurityLibraryRegistry:

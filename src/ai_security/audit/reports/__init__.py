@@ -2,7 +2,7 @@
 Audit report generators.
 """
 
-from .json_reporter import JSONAuditReporter
 from .html_reporter import HTMLAuditReporter
+from .json_reporter import JSONAuditReporter
 
 __all__ = ["JSONAuditReporter", "HTMLAuditReporter"]

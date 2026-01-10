@@ -213,7 +213,7 @@ class LLM04ModelDoSDetector(BaseControlDetector):
             for match in matches[:2]:
                 evidence_items.append(self._evidence_from_decorator(
                     match.file_path, match.line_number, match.name,
-                    f"Rate limiting decorator"
+                    "Rate limiting decorator"
                 ))
 
         # Determine level
@@ -313,7 +313,7 @@ class LLM06SensitiveInfoDetector(BaseControlDetector):
         for pattern in secret_patterns:
             if self.deps.has_package(pattern):
                 evidence_items.append(self._evidence_from_dependency(
-                    "", pattern, f"Secret detection"
+                    "", pattern, "Secret detection"
                 ))
 
         # Check for filtering functions

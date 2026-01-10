@@ -8,7 +8,7 @@ Calculates security posture for:
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 from ai_security.scorers.base_scorer import BaseScorer, CategoryScore
 

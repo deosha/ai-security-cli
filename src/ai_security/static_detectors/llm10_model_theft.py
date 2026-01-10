@@ -4,9 +4,10 @@ LLM10: Model Theft Detector
 Detects vulnerabilities that could lead to unauthorized access to ML models.
 """
 
-from typing import Dict, Any, List
-from ai_security.static_detectors.base_detector import BaseDetector, Finding
+from typing import Any, Dict, List
+
 from ai_security.models.finding import Severity
+from ai_security.static_detectors.base_detector import BaseDetector, Finding
 
 
 class ModelTheftDetector(BaseDetector):

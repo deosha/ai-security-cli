@@ -1,7 +1,7 @@
 """Ollama provider implementation for local LLM inference"""
 
-from typing import List, Dict, Any, Optional
 import logging
+from typing import List, Optional
 
 from .base_provider import BaseProvider, LLMResponse, ProviderError
 

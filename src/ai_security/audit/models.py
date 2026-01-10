@@ -3,9 +3,9 @@ Audit data models for evidence and scoring.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
-from datetime import datetime
 
 
 class MaturityLevel(Enum):

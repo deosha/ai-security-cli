@@ -2,9 +2,10 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from .finding import Finding
-from .vulnerability import LiveVulnerability, LiveTestResult
+from .vulnerability import LiveTestResult, LiveVulnerability
 
 
 def _get_risk_level(score: float) -> str:

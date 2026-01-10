@@ -1,7 +1,7 @@
 """Core orchestration modules"""
 
 from .scanner import StaticScanner
-from .tester import LiveTester, run_live_test, DETECTOR_REGISTRY
+from .tester import DETECTOR_REGISTRY, LiveTester, run_live_test
 
 __all__ = [
     "StaticScanner",

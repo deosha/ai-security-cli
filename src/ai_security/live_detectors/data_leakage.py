@@ -1,11 +1,12 @@
 """Live data leakage detector"""
 
-import re
-from typing import Dict, List, Any
 import logging
+import re
+from typing import Any, Dict, List
 
 from ai_security.models.finding import Severity
 from ai_security.providers.base_provider import LLMResponse
+
 from .base_live_detector import BaseLiveDetector, TestPayload
 
 logger = logging.getLogger(__name__)

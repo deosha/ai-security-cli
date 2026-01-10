@@ -136,7 +136,7 @@ class MaturityScorer:
                             category=cat_id,
                             control_id=control.control_id,
                             title=control.control_name,
-                            description=f"Control not detected or below threshold",
+                            description="Control not detected or below threshold",
                             remediation=rec_text,
                         ))
 

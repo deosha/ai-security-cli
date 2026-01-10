@@ -9,10 +9,10 @@ Detects risks related to model fine-tuning and data collection:
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
-from ai_security.static_detectors.base_detector import BaseDetector
 from ai_security.models.finding import Finding, Severity
+from ai_security.static_detectors.base_detector import BaseDetector
 
 logger = logging.getLogger(__name__)
 
