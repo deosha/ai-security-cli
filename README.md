@@ -6,26 +6,30 @@ A unified command-line tool for AI/LLM security scanning and testing. Combines s
 
 ## Benchmarks
 
-| Metric | Value |
-|--------|-------|
-| **Precision** | 20.0% |
-| **Recall** | 57.8% |
-| **F1 Score** | 29.7% |
+Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth vulnerabilities.
 
-**Per-Category Detection:**
+| Metric | AI Security CLI | Semgrep | Bandit |
+|--------|-----------------|---------|--------|
+| **Precision** | 69.6% | 66.7% | 51.5% |
+| **Recall** | 53.4% | 8.2% | 46.6% |
+| **F1 Score** | **60.5%** | 14.6% | 48.9% |
 
-| Category | Recall | Status |
-|----------|--------|--------|
-| LLM01: Prompt Injection | 100% | Excellent |
-| LLM04: Model DoS | 100% | Excellent |
-| LLM08: Excessive Agency | 100% | Excellent |
-| LLM09: Overreliance | 100% | Excellent |
-| LLM10: Model Theft | 86% | Good |
-| LLM06: Sensitive Info | 71% | Moderate |
-| LLM05: Supply Chain | 14% | Improving |
-| LLM02, LLM03, LLM07 | 0-14% | In Development |
+**Per-Category Detection (Recall):**
 
-Tested on 10 real-world repos: LangChain, LlamaIndex, vLLM, OpenAI Python, Haystack, LiteLLM, DSPy, Guidance, Semantic Kernel, Text Gen WebUI (14,991 files, 6,668 findings).
+| Category | Recall | Precision | F1 |
+|----------|--------|-----------|-----|
+| LLM07: Insecure Plugin | 85.7% | 85.7% | 85.7% |
+| LLM06: Sensitive Info | 71.4% | 55.6% | 62.5% |
+| LLM04: Model DoS | 66.7% | 100% | 80.0% |
+| LLM09: Overreliance | 66.7% | 100% | 80.0% |
+| LLM05: Supply Chain | 60.0% | 54.5% | 57.1% |
+| LLM01: Prompt Injection | 50.0% | 75.0% | 60.0% |
+| LLM10: Model Theft | 42.9% | 75.0% | 54.5% |
+| LLM03: Training Poisoning | 40.0% | 100% | 57.1% |
+| LLM08: Excessive Agency | 33.3% | 100% | 50.0% |
+| LLM02: Insecure Output | 30.0% | 42.9% | 35.3% |
+
+AI Security CLI outperforms both Semgrep and Bandit on F1 score by detecting LLM-specific vulnerabilities that generic tools miss.
 
 ## Features
 

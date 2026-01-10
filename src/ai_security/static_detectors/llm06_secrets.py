@@ -120,6 +120,26 @@ class SecretsDetector(BaseDetector):
         'openai_key', 'anthropic_key', 'openai_api_key', 'anthropic_api_key'
     }
 
+    # PII patterns for sensitive data detection
+    PII_PATTERNS = {
+        'ssn': re.compile(r'\d{3}[-\s]?\d{2}[-\s]?\d{4}'),  # SSN
+        'credit_card': re.compile(r'\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}'),  # Credit card
+        'email': re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'),  # Email
+    }
+
+    # Keywords indicating sensitive data in prompts/system messages
+    SENSITIVE_PROMPT_KEYWORDS = {
+        'password', 'secret', 'confidential', 'internal', 'private',
+        'ssn', 'credit_card', 'creditcard', 'social security',
+    }
+
+    # Variables that likely contain sensitive user data
+    SENSITIVE_DATA_VAR_NAMES = {
+        'user_data', 'userdata', 'user_info', 'pii', 'personal_data',
+        'profile', 'secret', 'password', 'credentials', 'ssn',
+        'credit_card', 'cc_number', 'social_security'
+    }
+
     # Safe patterns to exclude (environment variables, config references)
     SAFE_PATTERNS = {
         'os.getenv', 'os.environ', 'env.get', 'config.get',
@@ -128,7 +148,7 @@ class SecretsDetector(BaseDetector):
     }
 
     def _gather_potential_findings(self, parsed_data: Dict[str, Any]) -> List[Finding]:
-        """Find all potential hardcoded secrets"""
+        """Find all potential hardcoded secrets and sensitive data exposure"""
         findings = []
 
         file_path = parsed_data.get('file_path', 'unknown')
@@ -137,6 +157,7 @@ class SecretsDetector(BaseDetector):
         llm_calls = parsed_data.get('llm_api_calls', [])
         string_ops = parsed_data.get('string_operations', [])
         classes = parsed_data.get('classes', [])
+        functions = parsed_data.get('functions', [])
 
         # Get line numbers of LLM calls to avoid duplicate detection
         llm_call_lines = {call['line'] for call in llm_calls}
@@ -152,6 +173,15 @@ class SecretsDetector(BaseDetector):
 
         # 4. Check class attributes (common place for API keys)
         findings.extend(self._check_class_attributes(classes, source_lines, file_path))
+
+        # 5. Check for secrets/PII flowing into prompts
+        findings.extend(self._check_secrets_in_prompts(functions, llm_calls, assignments, source_lines, file_path))
+
+        # 6. Check for sensitive data in system prompts
+        findings.extend(self._check_sensitive_system_prompts(llm_calls, source_lines, file_path))
+
+        # 7. Check for sensitive data logging
+        findings.extend(self._check_sensitive_logging(functions, assignments, source_lines, file_path))
 
         return findings
 
@@ -431,16 +461,234 @@ class SecretsDetector(BaseDetector):
         end = min(len(source_lines), line_num + context)
         return '\n'.join(source_lines[start:end])
 
+    def _check_secrets_in_prompts(
+        self,
+        functions: List[Dict[str, Any]],
+        llm_calls: List[Dict[str, Any]],
+        assignments: List[Dict[str, Any]],
+        source_lines: List[str],
+        file_path: str
+    ) -> List[Finding]:
+        """Check for secrets/PII being passed into prompts sent to LLMs"""
+        findings = []
+
+        # Build map of variable names that contain secrets/sensitive data
+        sensitive_vars = set()
+        for assign in assignments:
+            var_name = assign.get('name', '').lower()
+            value = assign.get('value', '')
+
+            # Check if variable name indicates sensitive data
+            if any(s in var_name for s in self.SENSITIVE_DATA_VAR_NAMES):
+                sensitive_vars.add(assign.get('name', ''))
+
+            # Check if variable name indicates secret
+            if any(s in var_name for s in self.SECRET_VARIABLE_NAMES):
+                sensitive_vars.add(assign.get('name', ''))
+
+            # Check if value contains PII patterns
+            for pii_type, pattern in self.PII_PATTERNS.items():
+                if pattern.search(value):
+                    sensitive_vars.add(assign.get('name', ''))
+
+        # For each function containing LLM call, check if sensitive vars flow into prompt
+        for func in functions:
+            func_name = func.get('name', '').lower()
+            func_start = func.get('line', 0)
+            func_end = func.get('end_line', func_start + 100)
+
+            # Find LLM calls in this function
+            func_llm_calls = [
+                c for c in llm_calls
+                if func_start <= c.get('line', 0) <= func_end
+            ]
+
+            if not func_llm_calls:
+                continue
+
+            # Check source lines in function for f-strings with sensitive vars
+            for line_num in range(func_start, min(func_end + 1, len(source_lines) + 1)):
+                if line_num <= 0 or line_num > len(source_lines):
+                    continue
+                line = source_lines[line_num - 1]
+
+                # Look for f-string or .format() containing sensitive variable
+                if 'f"' in line or "f'" in line or '.format(' in line:
+                    # Check if any sensitive variable is referenced
+                    for var in sensitive_vars:
+                        if '{' + var + '}' in line or var + '}' in line:
+                            snippet = self._get_code_snippet(source_lines, line_num)
+                            findings.append(Finding(
+                                id=f"{self.detector_id}_{file_path}_{line_num}_secret_in_prompt",
+                                category=f"{self.detector_id}: {self.name}",
+                                severity=Severity.HIGH,
+                                confidence=0.0,
+                                title="Sensitive data passed into LLM prompt",
+                                description=(
+                                    f"Variable '{var}' containing sensitive data is included "
+                                    f"in a prompt string on line {line_num}. This can lead to "
+                                    f"data leakage through model outputs, logs, or training data."
+                                ),
+                                file_path=file_path,
+                                line_number=line_num,
+                                code_snippet=snippet,
+                                recommendation=(
+                                    "Sensitive Data in Prompts:\n"
+                                    "1. Never include PII (SSN, credit cards, emails) in prompts\n"
+                                    "2. Redact or anonymize sensitive data before sending to LLM\n"
+                                    "3. Use data masking: 'SSN: ***-**-1234'\n"
+                                    "4. Consider using PII detection libraries before LLM calls\n"
+                                    "5. Implement data classification to identify sensitive fields"
+                                ),
+                                evidence={
+                                    'sensitive_variable': var,
+                                    'detection_type': 'secret_in_prompt'
+                                }
+                            ))
+
+        return findings
+
+    def _check_sensitive_system_prompts(
+        self,
+        llm_calls: List[Dict[str, Any]],
+        source_lines: List[str],
+        file_path: str
+    ) -> List[Finding]:
+        """Check for confidential information in system prompts"""
+        findings = []
+
+        for llm_call in llm_calls:
+            line_num = llm_call.get('line', 0)
+
+            # Get context around LLM call to find system prompt
+            start = max(0, line_num - 10)
+            end = min(len(source_lines), line_num + 5)
+            context = '\n'.join(source_lines[start:end])
+            context_lower = context.lower()
+
+            # Check for system prompt with sensitive keywords
+            if 'system' in context_lower and ('role' in context_lower or 'message' in context_lower):
+                for keyword in self.SENSITIVE_PROMPT_KEYWORDS:
+                    if keyword in context_lower:
+                        # Find the actual line with the keyword
+                        for i in range(start, end):
+                            if i < len(source_lines) and keyword in source_lines[i].lower():
+                                snippet = self._get_code_snippet(source_lines, i + 1)
+                                findings.append(Finding(
+                                    id=f"{self.detector_id}_{file_path}_{i+1}_sensitive_system_prompt",
+                                    category=f"{self.detector_id}: {self.name}",
+                                    severity=Severity.HIGH,
+                                    confidence=0.0,
+                                    title="Sensitive information in system prompt",
+                                    description=(
+                                        f"System prompt contains sensitive keyword '{keyword}' "
+                                        f"on line {i+1}. Confidential business logic, pricing, or "
+                                        f"internal policies in system prompts can be extracted "
+                                        f"through prompt injection attacks."
+                                    ),
+                                    file_path=file_path,
+                                    line_number=i + 1,
+                                    code_snippet=snippet,
+                                    recommendation=(
+                                        "System Prompt Security:\n"
+                                        "1. Never embed secrets or confidential data in prompts\n"
+                                        "2. Move business logic to backend, not LLM instructions\n"
+                                        "3. Use output filtering to prevent system prompt leakage\n"
+                                        "4. Implement prompt injection defenses\n"
+                                        "5. Consider prompt obfuscation for sensitive instructions"
+                                    ),
+                                    evidence={
+                                        'sensitive_keyword': keyword,
+                                        'detection_type': 'sensitive_system_prompt'
+                                    }
+                                ))
+                                break
+
+        return findings
+
+    def _check_sensitive_logging(
+        self,
+        functions: List[Dict[str, Any]],
+        assignments: List[Dict[str, Any]],
+        source_lines: List[str],
+        file_path: str
+    ) -> List[Finding]:
+        """Check for logging of sensitive data"""
+        findings = []
+
+        # Build set of sensitive variable names
+        sensitive_vars = set()
+        for assign in assignments:
+            var_name = assign.get('name', '').lower()
+            if any(s in var_name for s in self.SENSITIVE_DATA_VAR_NAMES):
+                sensitive_vars.add(assign.get('name', ''))
+            if any(s in var_name for s in self.SECRET_VARIABLE_NAMES):
+                sensitive_vars.add(assign.get('name', ''))
+
+        # Check each line for logging patterns with sensitive vars
+        for line_num, line in enumerate(source_lines, 1):
+            line_lower = line.lower()
+
+            # Check for logging calls
+            if any(log in line_lower for log in ['logger.', 'logging.', 'log.', 'print(']):
+                # Check if any sensitive variable is being logged
+                for var in sensitive_vars:
+                    if var in line:
+                        snippet = self._get_code_snippet(source_lines, line_num)
+                        findings.append(Finding(
+                            id=f"{self.detector_id}_{file_path}_{line_num}_sensitive_logging",
+                            category=f"{self.detector_id}: {self.name}",
+                            severity=Severity.MEDIUM,
+                            confidence=0.0,
+                            title="Sensitive data in log statement",
+                            description=(
+                                f"Variable '{var}' containing sensitive data is being logged "
+                                f"on line {line_num}. Log files often lack proper access controls "
+                                f"and can expose PII, secrets, or prompt content."
+                            ),
+                            file_path=file_path,
+                            line_number=line_num,
+                            code_snippet=snippet,
+                            recommendation=(
+                                "Secure Logging:\n"
+                                "1. Never log PII, credentials, or sensitive user data\n"
+                                "2. Implement log redaction for sensitive fields\n"
+                                "3. Use structured logging with data classification\n"
+                                "4. Set appropriate log levels (avoid DEBUG in prod)\n"
+                                "5. Ensure log storage has proper access controls"
+                            ),
+                            evidence={
+                                'logged_variable': var,
+                                'detection_type': 'sensitive_logging'
+                            }
+                        ))
+
+        return findings
+
     def calculate_confidence(self, evidence: Dict[str, Any]) -> float:
         """
         Calculate confidence based on evidence
 
-        Scoring:
-        - Base: 0.5 (pattern matched)
-        - +0.2 if high entropy (>4.5)
-        - +0.2 if variable name indicates secret
-        - +0.1 if known secret format (not generic)
+        Scoring varies by detection type:
+        - Hardcoded secrets: entropy + variable name + format pattern
+        - Secret in prompt: 0.8 base (high confidence when taint flows to LLM)
+        - Sensitive system prompt: 0.75 base
+        - Sensitive logging: 0.7 base
         """
+        detection_type = evidence.get('detection_type', '')
+
+        # Handle new detection types
+        if detection_type == 'secret_in_prompt':
+            # High confidence - sensitive variable flows to LLM
+            return 0.8
+        elif detection_type == 'sensitive_system_prompt':
+            # Good confidence - keyword in system prompt context
+            return 0.75
+        elif detection_type == 'sensitive_logging':
+            # Moderate confidence - logging sensitive var name
+            return 0.7
+
+        # Original logic for hardcoded secrets
         confidence = 0.5  # Base confidence for pattern match
 
         # Entropy boost

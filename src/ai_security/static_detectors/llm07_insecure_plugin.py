@@ -54,6 +54,27 @@ class InsecurePluginDetector(BaseDetector):
         ]
     }
 
+    # Tool function patterns (LLM-invokable functions)
+    TOOL_PATTERNS = [
+        '_tool', 'tool_', '_action', 'action_',
+        'execute_', 'run_', 'perform_',
+    ]
+
+    # Dangerous operations often found in tools
+    DANGEROUS_TOOL_OPS = {
+        'shell_exec': ['subprocess.run', 'subprocess.call', 'os.system', 'shell=True'],
+        'file_access': ['open(', 'read(', 'write(', 'unlink', 'remove'],
+        'sql_exec': ['cursor.execute', '.execute(', 'raw_query'],
+        'http_request': ['requests.get', 'requests.post', 'urllib.request', 'httpx.'],
+        'code_exec': ['eval(', 'exec(', 'compile('],
+    }
+
+    # LLM output parameter patterns
+    LLM_OUTPUT_PARAMS = [
+        'llm_output', 'model_output', 'ai_output', 'response',
+        'llm_response', 'generated', 'completion'
+    ]
+
     # Validation patterns (positive indicators)
     VALIDATION_PATTERNS = [
         'validate', 'check', 'verify', 'sanitize',
@@ -116,6 +137,10 @@ class InsecurePluginDetector(BaseDetector):
         auth_findings = self._check_plugin_authentication(parsed_data)
         findings.extend(auth_findings)
 
+        # Check for insecure tool functions (LLM-invokable with dangerous ops)
+        tool_findings = self._check_insecure_tools(parsed_data)
+        findings.extend(tool_findings)
+
         return findings
 
     def calculate_confidence(self, evidence: Dict[str, Any]) -> float:
@@ -124,9 +149,12 @@ class InsecurePluginDetector(BaseDetector):
 
         High confidence (0.8-1.0):
         - Dynamic loading without validation
+        - Tool functions executing dangerous ops on LLM output
+
+        Medium-high confidence (0.7-0.8):
         - Missing authentication on plugin endpoints
 
-        Medium confidence (0.6-0.8):
+        Medium confidence (0.6-0.7):
         - Missing input validation
         - No sandboxing detected
 
@@ -136,6 +164,15 @@ class InsecurePluginDetector(BaseDetector):
         Returns:
             Confidence score (0.0-1.0)
         """
+        detection_type = evidence.get('detection_type', '')
+
+        # Insecure tool functions - high confidence
+        if detection_type == 'insecure_tool':
+            dangerous_ops = evidence.get('dangerous_operations', [])
+            if 'shell_exec' in dangerous_ops or 'code_exec' in dangerous_ops:
+                return 0.90  # Very high for command/code execution
+            return 0.85
+
         confidence = 0.7  # Base confidence
 
         # Collect all confidence scores and take the maximum
@@ -432,6 +469,97 @@ class InsecurePluginDetector(BaseDetector):
                     findings.append(finding)
 
         return findings
+
+    def _check_insecure_tools(self, parsed_data: Dict[str, Any]) -> List[Finding]:
+        """Check for tool functions that execute dangerous operations on LLM output"""
+        findings = []
+        functions = parsed_data.get('functions', [])
+        source_lines = parsed_data.get('source_lines', [])
+
+        for func in functions:
+            func_name = func.get('name', '').lower()
+            func_start = func.get('line', 0)
+            func_end = func.get('end_line', func_start + 30)
+
+            # Check if this looks like a tool function
+            is_tool_func = any(pattern in func_name for pattern in self.TOOL_PATTERNS)
+
+            if not is_tool_func:
+                continue
+
+            # Get function body
+            func_body = '\n'.join(source_lines[max(0, func_start-1):min(len(source_lines), func_end)])
+            func_lower = func_body.lower()
+
+            # Check if function takes LLM output as parameter
+            takes_llm_output = any(
+                param in func_lower for param in self.LLM_OUTPUT_PARAMS
+            )
+
+            if not takes_llm_output:
+                continue
+
+            # Check for dangerous operations
+            dangerous_ops_found = []
+            for op_type, patterns in self.DANGEROUS_TOOL_OPS.items():
+                for pattern in patterns:
+                    if pattern in func_body:  # Case-sensitive for code patterns
+                        dangerous_ops_found.append((op_type, pattern))
+                        break
+
+            if not dangerous_ops_found:
+                continue
+
+            # Check for validation/sanitization
+            has_validation = any(
+                pattern in func_lower for pattern in self.VALIDATION_PATTERNS
+            )
+
+            if not has_validation:
+                op_types = list(set(op[0] for op in dangerous_ops_found))
+                severity = Severity.CRITICAL if 'shell_exec' in op_types or 'code_exec' in op_types else Severity.HIGH
+
+                finding = Finding(
+                    id=f"{self.detector_id}_{parsed_data.get('file_path', '')}_{func_start}_tool",
+                    category=f"{self.detector_id}: {self.name}",
+                    severity=severity,
+                    confidence=0.0,
+                    title=f"Insecure tool function '{func.get('name')}' executes dangerous operations",
+                    description=(
+                        f"Tool function '{func.get('name')}' on line {func_start} takes LLM output "
+                        f"as a parameter and performs dangerous operations ({', '.join(op_types)}) "
+                        f"without proper validation. Attackers can craft malicious LLM outputs to "
+                        f"execute arbitrary commands, access files, or perform SQL injection."
+                    ),
+                    file_path=parsed_data.get('file_path', ''),
+                    line_number=func_start,
+                    code_snippet=self._get_code_snippet(source_lines, func_start, context=5),
+                    recommendation=self._get_tool_security_recommendation(),
+                    evidence={
+                        'function_name': func.get('name'),
+                        'takes_llm_output': True,
+                        'dangerous_operations': op_types,
+                        'has_validation': False,
+                        'detection_type': 'insecure_tool'
+                    }
+                )
+                findings.append(finding)
+
+        return findings
+
+    def _get_tool_security_recommendation(self) -> str:
+        """Get recommendation for securing LLM tool functions"""
+        return """Secure Tool/Plugin Implementation:
+1. NEVER execute shell commands from LLM output directly
+2. Use allowlists for permitted commands/operations
+3. Validate all file paths against allowed directories
+4. Use parameterized queries - never raw SQL from LLM
+5. Validate URLs against allowlist before HTTP requests
+6. Implement strict input schemas (JSON Schema, Pydantic)
+7. Add rate limiting and request throttling
+8. Log all tool invocations for audit
+9. Use principle of least privilege
+10. Implement human-in-the-loop for destructive operations"""
 
     def _get_validation_recommendation(self) -> str:
         """Get recommendation for plugin input validation"""

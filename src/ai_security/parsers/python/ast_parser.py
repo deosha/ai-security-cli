@@ -29,18 +29,28 @@ class PythonASTParser:
 
     # LLM library patterns to detect
     LLM_PATTERNS = [
+        # OpenAI
         'openai.',
-        'anthropic.',
         'ChatOpenAI',
+        # Anthropic
+        'anthropic.',
         'ChatAnthropic',
         'Anthropic',
+        # LangChain
+        'langchain',
+        'llama_index',
+        # Local models / Ollama
+        'ollama',
+        'localhost:11434',  # Default Ollama port
+        'api/generate',     # Ollama API endpoint
+        'api/chat',         # Ollama chat endpoint
+        # Generic LLM patterns
         'llm.',
         'model.',
         '.generate',
         '.complete',
         '.chat',
-        'langchain',
-        'llama_index',
+        '.invoke',          # LangChain invoke pattern
         # Fine-tuning API patterns (OpenAI, Anthropic, etc.)
         '.fine_tuning.',      # client.fine_tuning.jobs.create(...)
         '.finetune.',         # legacy: openai.FineTune.create(...)
@@ -180,11 +190,25 @@ class PythonASTParser:
 
         return assignments
 
+    # HTTP client patterns that might call LLM APIs
+    HTTP_CLIENT_PATTERNS = ['httpx.post', 'requests.post', 'aiohttp']
+
+    # URL patterns for local/self-hosted LLMs
+    LOCAL_LLM_URL_PATTERNS = [
+        'localhost:11434',  # Ollama default
+        '127.0.0.1:11434',
+        'api/generate',     # Ollama generate endpoint
+        'api/chat',         # Ollama chat endpoint
+        '/v1/completions',  # OpenAI-compatible local
+        '/v1/chat/completions',
+    ]
+
     def _extract_llm_calls(self) -> List[Dict[str, Any]]:
         """
         Extract LLM API calls
 
-        Detects calls to: openai, anthropic, langchain, etc.
+        Detects calls to: openai, anthropic, langchain, ollama, etc.
+        Also detects HTTP calls to local LLM endpoints.
         """
         llm_calls = []
 
@@ -193,7 +217,20 @@ class PythonASTParser:
                 call_str = self._unparse_safe(node.func)
 
                 # Check if this looks like an LLM call
-                if any(pattern in call_str for pattern in self.LLM_PATTERNS):
+                is_llm_call = any(pattern in call_str for pattern in self.LLM_PATTERNS)
+
+                # Also check HTTP clients calling LLM endpoints (e.g., Ollama)
+                if not is_llm_call and any(p in call_str for p in self.HTTP_CLIENT_PATTERNS):
+                    # Check if URL argument contains LLM endpoint pattern
+                    args_str = ' '.join(self._extract_call_args(node))
+                    keywords_str = ' '.join(
+                        self._unparse_safe(kw.value) for kw in node.keywords if kw.arg
+                    )
+                    full_args = args_str + ' ' + keywords_str
+                    if any(p in full_args for p in self.LOCAL_LLM_URL_PATTERNS):
+                        is_llm_call = True
+
+                if is_llm_call:
                     llm_calls.append({
                         'function': call_str,
                         'line': node.lineno,
