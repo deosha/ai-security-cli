@@ -128,6 +128,9 @@ class BaseDetector(ABC):
             # Calculate confidence based on evidence
             confidence = self.calculate_confidence(finding.evidence)
 
+            # Apply detector-specific mitigations (e.g., sanitization, parameterized queries)
+            confidence = self.apply_mitigations(confidence, finding.evidence)
+
             # Apply negative evidence adjustments
             confidence = self._apply_negative_evidence(
                 confidence, finding, negative_evidence, source_lines
