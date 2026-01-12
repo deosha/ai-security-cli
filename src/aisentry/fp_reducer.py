@@ -87,8 +87,9 @@ FP_PATTERNS = {
     ],
     # Base64 encoded images, not leaked secrets
     'base64_image': [
-        r'data:image/[a-z]+;base64,',
+        r'data:image/[a-z+]+;base64,',  # Handles svg+xml, png, etc.
         r'base64.*(?:png|jpg|jpeg|svg|gif)',
+        r'data:image/',  # Any data:image URI
     ],
     # Placeholder/example values
     'placeholder': [
