@@ -106,7 +106,7 @@ class TestStaticScannerInit:
         scanner = StaticScanner()
         assert scanner.verbose is False
         assert scanner.filter_categories is None
-        assert len(scanner.detectors) == 10  # All 10 OWASP categories
+        assert len(scanner.detectors) == 11  # 10 OWASP categories + SQL injection
 
     def test_verbose_mode(self):
         """Test verbose mode initialization."""
