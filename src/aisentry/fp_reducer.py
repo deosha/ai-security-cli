@@ -105,6 +105,61 @@ FP_PATTERNS = {
         r'process\.env\.',
         r'\$\{[A-Z_]+\}',
     ],
+    # Python stdlib/async patterns (not LLM output execution)
+    'async_run': [
+        r'asyncio\.run\s*\(',
+        r'loop\.run_until_complete\s*\(',
+        r'await\s+\w+\.run\s*\(',
+    ],
+    # Class inheritance patterns (not LLM execution)
+    'super_run': [
+        r'super\(\)\.run\s*\(',
+        r'super\(\w+,\s*\w+\)\.run\s*\(',
+        r'self\._run\s*\(',
+    ],
+    # Server/runner frameworks (not LLM output)
+    'server_runner': [
+        r'uvicorn\.run\s*\(',
+        r'uvloop\.run\s*\(',
+        r'gunicorn',
+        r'hypercorn\.run',
+        r'daphne\.run',
+    ],
+    # LangChain/framework internal patterns
+    'framework_internal': [
+        r'RunnableMap\s*\(',
+        r'RunnableSequence',
+        r'RunnableLambda',
+        r'\|\s*parser',
+        r'langchain.*\.invoke\s*\(',
+        r'llama_index.*\.invoke\s*\(',
+    ],
+    # Executor pool patterns (not LLM execution)
+    'executor_pool': [
+        r'ThreadPoolExecutor',
+        r'ProcessPoolExecutor',
+        r'concurrent\.futures',
+        r'\.submit\s*\(',
+    ],
+    # Build/CI tool subprocess calls
+    'build_tools': [
+        r'pip\s+install',
+        r'poetry\s+install',
+        r'npm\s+install',
+        r'yarn\s+install',
+        r'\bpytest\b',
+        r'python\s+setup\.py',
+        r'\bmake\s+(?:build|install|test|clean|all)\b',
+        r'git\s+clone',
+    ],
+    # Callback/handler patterns (framework design)
+    'callback_handler': [
+        r'callback.*handler',
+        r'on_\w+_start',
+        r'on_\w+_end',
+        r'run_manager',
+        r'CallbackManager',
+    ],
 }
 
 # File path patterns that indicate lower risk
@@ -129,13 +184,13 @@ CATEGORY_RISK = {
     'LLM01': 0.5,  # Prompt Injection - filter only low-confidence findings
     'LLM02': 0.7,  # Insecure Output Handling - usually real
     'LLM03': 0.5,  # Training Data Poisoning
-    'LLM04': 0.2,  # Model Denial of Service - low risk
+    'LLM04': 0.2,  # Model Denial of Service - often FP in frameworks
     'LLM05': 0.6,  # Supply Chain Vulnerabilities
     'LLM06': 0.8,  # Sensitive Information Disclosure - high risk
     'LLM07': 0.5,  # Insecure Plugin Design
-    'LLM08': 0.5,  # Excessive Agency - filter only low-confidence
+    'LLM08': 0.4,  # Excessive Agency - often FP in frameworks (tools/agents)
     'LLM09': 0.4,  # Overreliance
-    'LLM10': 0.4,  # Model Theft
+    'LLM10': 0.6,  # Model Theft - increased to avoid filtering real vulns
 }
 
 
@@ -205,12 +260,21 @@ class FPReducer:
             'is_docs_file': '/docs/' in file_path_lower or file_path_lower.endswith('.md'),
             'path_depth': file_path_lower.count('/'),
 
-            # FP pattern detection
+            # FP pattern detection - original patterns
             'has_session_exec': any(re.search(p, combined_text) for p in FP_PATTERNS['session_exec']),
             'has_model_eval': any(re.search(p, combined_text) for p in FP_PATTERNS['model_eval']),
             'has_base64_image': any(re.search(p, combined_text) for p in FP_PATTERNS['base64_image']),
             'is_placeholder': any(re.search(p, combined_text, re.IGNORECASE) for p in FP_PATTERNS['placeholder']),
             'is_env_reference': any(re.search(p, combined_text) for p in FP_PATTERNS['env_reference']),
+
+            # FP pattern detection - new patterns from real-world repos
+            'has_async_run': any(re.search(p, combined_text) for p in FP_PATTERNS['async_run']),
+            'has_super_run': any(re.search(p, combined_text) for p in FP_PATTERNS['super_run']),
+            'has_server_runner': any(re.search(p, combined_text) for p in FP_PATTERNS['server_runner']),
+            'has_framework_internal': any(re.search(p, combined_text) for p in FP_PATTERNS['framework_internal']),
+            'has_executor_pool': any(re.search(p, combined_text) for p in FP_PATTERNS['executor_pool']),
+            'has_build_tools': any(re.search(p, combined_text) for p in FP_PATTERNS['build_tools']),
+            'has_callback_handler': any(re.search(p, combined_text) for p in FP_PATTERNS['callback_handler']),
 
             # Category features
             'category_code': finding.category.split(':')[0] if ':' in finding.category else finding.category,
@@ -240,7 +304,7 @@ class FPReducer:
         score = features['static_confidence'] * features['category_risk']
         reasons = []
 
-        # Apply penalties for FP indicators
+        # Apply penalties for FP indicators - file path based
         if features['is_test_file']:
             score *= 0.3
             reasons.append("test file (-70%)")
@@ -257,6 +321,7 @@ class FPReducer:
             score *= 0.3
             reasons.append("docs file (-70%)")
 
+        # Apply penalties for FP indicators - original patterns
         if features['has_session_exec']:
             score *= 0.1
             reasons.append("SQLAlchemy session.exec (-90%)")
@@ -276,6 +341,35 @@ class FPReducer:
         if features['is_env_reference']:
             score *= 0.5
             reasons.append("env variable reference (-50%)")
+
+        # Apply penalties for FP indicators - new patterns from real-world repos
+        if features.get('has_async_run'):
+            score *= 0.15
+            reasons.append("asyncio.run pattern (-85%)")
+
+        if features.get('has_super_run'):
+            score *= 0.1
+            reasons.append("super().run inheritance (-90%)")
+
+        if features.get('has_server_runner'):
+            score *= 0.1
+            reasons.append("server runner (uvicorn/gunicorn) (-90%)")
+
+        if features.get('has_framework_internal'):
+            score *= 0.2
+            reasons.append("framework internal pattern (-80%)")
+
+        if features.get('has_executor_pool'):
+            score *= 0.15
+            reasons.append("executor pool pattern (-85%)")
+
+        if features.get('has_build_tools'):
+            score *= 0.1
+            reasons.append("build tool subprocess (-90%)")
+
+        if features.get('has_callback_handler'):
+            score *= 0.3
+            reasons.append("callback handler pattern (-70%)")
 
         # Boost for high severity with code context
         if features['severity_score'] >= 0.75 and features['has_code_snippet']:
