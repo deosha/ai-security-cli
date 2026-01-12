@@ -41,6 +41,7 @@ Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth 
 - **SARIF Output**: CI/CD integration with GitHub Code Scanning, Azure DevOps, VS Code, and more
 - **Configurable**: YAML config files, environment variables, per-category thresholds, test file handling
 - **4-Factor Confidence Scoring**: Advanced confidence calculation for accurate vulnerability assessment
+- **False Positive Reduction**: ML-trained heuristics to filter common false positives (model.eval, session.exec, etc.)
 
 ## Live Model Testing
 
@@ -363,6 +364,8 @@ aisentry scan <path> [OPTIONS]
 | `--exclude-dir` | Directories to exclude (repeatable) | - |
 | `--exclude-tests` | Skip test files entirely | false |
 | `--demote-tests` | Reduce confidence for test file findings | true |
+| `--fp-reduction/--no-fp-reduction` | Enable/disable false positive filtering | true |
+| `--fp-threshold` | Minimum TP probability to keep findings (0.0-1.0) | 0.4 |
 | `-v, --verbose` | Enable verbose output | false |
 
 **Examples:**
