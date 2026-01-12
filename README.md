@@ -63,6 +63,9 @@ aisentry focuses on **static code analysis** - finding vulnerabilities in your s
 # Basic installation
 pip install aisentry
 
+# With ML-based false positive reduction
+pip install aisentry[ml]
+
 # With cloud provider support
 pip install aisentry[cloud]
 
@@ -119,6 +122,28 @@ global_threshold: 0.70
 | `AISEC_THRESHOLD_LLM01` | Per-category threshold | `0.80` |
 
 **Precedence:** CLI flags > Environment variables > .aisentry.yaml > Defaults
+
+## False Positive Reduction
+
+aisentry includes ML-trained heuristics to automatically filter common false positives:
+
+- **PyTorch `model.eval()`** - Not Python's dangerous `eval()`
+- **SQLAlchemy `session.exec()`** - Not Python's dangerous `exec()`
+- **Base64 images** - Not leaked API keys
+- **Placeholder values** - Example/dummy credentials in docs
+
+```bash
+# FP reduction is enabled by default
+aisentry scan ./my_project
+
+# Disable FP reduction
+aisentry scan ./my_project --no-fp-reduction
+
+# Adjust threshold (0.0-1.0, default 0.4)
+aisentry scan ./my_project --fp-threshold 0.5
+```
+
+For enhanced ML-based reduction, install with `pip install aisentry[ml]`. The ML model achieves 88% accuracy on labeled security findings.
 
 ## Quick Start
 
