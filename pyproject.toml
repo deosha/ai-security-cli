@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aisentry"
-version = "1.0.0b7"
+version = "1.0.0b8"
 description = "AI Sentry - Unified AI/LLM Security Scanner for Static Code Analysis + Live Model Testing"
 readme = "README.md"
 requires-python = ">=3.8"
