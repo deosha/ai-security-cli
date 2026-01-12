@@ -209,7 +209,14 @@ class StaticScanner:
         self.owasp_scorer = OWASPScorer(verbose=verbose)
 
         # Initialize FP reducer for automatic false positive filtering
-        self.fp_reducer = FPReducer(use_ml=False, use_llm=False)
+        # Try to load trained ML model if available
+        model_path = Path(__file__).parent.parent.parent.parent / "training" / "fp_model.pkl"
+        if model_path.exists():
+            self.fp_reducer = FPReducer(use_ml=True, use_llm=False, model_path=str(model_path))
+            if verbose:
+                logger.info(f"Loaded trained FP model from {model_path}")
+        else:
+            self.fp_reducer = FPReducer(use_ml=False, use_llm=False)
 
     def _init_detectors(self) -> List:
         """

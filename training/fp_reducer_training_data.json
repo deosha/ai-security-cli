@@ -1,0 +1,442 @@
+[
+  {
+    "id": "LLM01_TP_PROMPT_FSTRING",
+    "category": "LLM01: Prompt Injection",
+    "severity": "HIGH",
+    "confidence": 0.92,
+    "description": "Direct f-string interpolation of user_input into system prompt before OpenAI completion",
+    "file_path": "src/chatbot/services/conversation.py",
+    "code_snippet": "messages = [{\"role\": \"system\", \"content\": f'Policy: {user_input}'}]",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM01_TP_TEMPLATE_CHAIN",
+    "category": "LLM01: Prompt Injection",
+    "severity": "CRITICAL",
+    "confidence": 0.96,
+    "description": "LangChain ChatPromptTemplate concatenates untrusted context into system instruction",
+    "file_path": "pipelines/langchain_agent.py",
+    "code_snippet": "template = PartialChatPromptTemplate.from_messages([(\"system\", ctx + candidate_prompt)])",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM01_FP_TEST_FIXTURE",
+    "category": "LLM01: Prompt Injection",
+    "severity": "MEDIUM",
+    "confidence": 0.62,
+    "description": "Unit test fixture builds fake prompts for fuzzing; safe test-only context",
+    "file_path": "tests/test_prompt_injection.py",
+    "code_snippet": "def prompt_fixture():\n    return f'ignore rules {seed}'",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM01_FP_PLACEHOLDER",
+    "category": "LLM01: Prompt Injection",
+    "severity": "LOW",
+    "confidence": 0.58,
+    "description": "Example notebook shows how to build prompts and uses placeholder text",
+    "file_path": "examples/prompts/prompt_injection.ipynb",
+    "code_snippet": "SYSTEM_PROMPT = 'Your name is {username}'",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM02_TP_EVAL",
+    "category": "LLM02: Insecure Output",
+    "severity": "CRITICAL",
+    "confidence": 0.94,
+    "description": "LLM response is evaluated via Python eval without sanitization",
+    "file_path": "agents/code_exec.py",
+    "code_snippet": "result = eval(llm_response['code'])",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM02_TP_SQL",
+    "category": "LLM02: Insecure Output",
+    "severity": "HIGH",
+    "confidence": 0.88,
+    "description": "SQL query text returned by LLM is executed directly",
+    "file_path": "db/auto_sql.py",
+    "code_snippet": "cursor.execute(f\"SELECT * FROM users WHERE {llm_sql}\")",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM02_FP_SQLALCHEMY_SESSION",
+    "category": "LLM02: Insecure Output",
+    "severity": "MEDIUM",
+    "confidence": 0.67,
+    "description": "session.exec call from SQLAlchemy mistaken for Python exec",
+    "file_path": "app/repository.py",
+    "code_snippet": "result = session.exec(select(User))",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM02_FP_PLACEHOLDER_OUTPUT",
+    "category": "LLM02: Insecure Output",
+    "severity": "LOW",
+    "confidence": 0.52,
+    "description": "Example shows how to log model output in docs",
+    "file_path": "docs/examples/output_handling.py",
+    "code_snippet": "print('LLM output:', response.text)",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM03_TP_REMOTE_DATA",
+    "category": "LLM03: Training Poisoning",
+    "severity": "HIGH",
+    "confidence": 0.82,
+    "description": "Training dataset pulls from untrusted HTTP without validation",
+    "file_path": "training/data_loader.py",
+    "code_snippet": "data = json.loads(requests.get(feed).text)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM03_TP_PICKLE",
+    "category": "LLM03: Training Poisoning",
+    "severity": "MEDIUM",
+    "confidence": 0.79,
+    "description": "Model weights loaded via pickle from user-controlled path",
+    "file_path": "training/load_weights.py",
+    "code_snippet": "weights = pickle.load(open(model_path, 'rb'))",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM03_FP_SYNTHETIC_DATA_GEN",
+    "category": "LLM03: Training Poisoning",
+    "severity": "LOW",
+    "confidence": 0.55,
+    "description": "Utility uses torch.utils.data.random_split; not untrusted",
+    "file_path": "tests/fakes/datasets.py",
+    "code_snippet": "train, test = random_split(dataset, [80, 20])",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM03_FP_MODEL_EVAL",
+    "category": "LLM03: Training Poisoning",
+    "severity": "LOW",
+    "confidence": 0.61,
+    "description": "Calls model.eval() which is safe inference mode",
+    "file_path": "models/bert_wrapper.py",
+    "code_snippet": "self.model.eval()",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM04_TP_LOOP",
+    "category": "LLM04: Model Denial of Service",
+    "severity": "HIGH",
+    "confidence": 0.81,
+    "description": "While loop fires unlimited OpenAI completions without rate limit",
+    "file_path": "workers/auto_refiner.py",
+    "code_snippet": "while True:\n    client.chat.completions.create(...)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM04_TP_PARALLEL",
+    "category": "LLM04: Model Denial of Service",
+    "severity": "HIGH",
+    "confidence": 0.78,
+    "description": "Async gather spawns 100 concurrent completions without throttling",
+    "file_path": "services/parallel_runner.py",
+    "code_snippet": "await asyncio.gather(*[call_llm(q) for q in queue])",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM04_FP_SIMPLE_CALL",
+    "category": "LLM04: Model Denial of Service",
+    "severity": "MEDIUM",
+    "confidence": 0.7,
+    "description": "Single completion call flagged despite no loop",
+    "file_path": "routes/ask.py",
+    "code_snippet": "client.chat.completions.create(model=MODEL, messages=msgs)",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM04_FP_TEST_CASE",
+    "category": "LLM04: Model Denial of Service",
+    "severity": "LOW",
+    "confidence": 0.48,
+    "description": "Pytest simulates missing rate limiting for demonstration",
+    "file_path": "tests/dos/test_rate_limit.py",
+    "code_snippet": "for _ in range(5): client.chat.completions.create(...)",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM05_TP_TRUST_REMOTE_CODE",
+    "category": "LLM05: Supply Chain",
+    "severity": "CRITICAL",
+    "confidence": 0.9,
+    "description": "Auto-downloads model repository and sets trust_remote_code=True",
+    "file_path": "models/loader.py",
+    "code_snippet": "AutoModel.from_pretrained(repo, trust_remote_code=True)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM05_TP_PIP_INSTALL",
+    "category": "LLM05: Supply Chain",
+    "severity": "HIGH",
+    "confidence": 0.85,
+    "description": "LLM suggests and executes pip install on arbitrary packages",
+    "file_path": "agents/tool_executor.py",
+    "code_snippet": "subprocess.run(['pip', 'install', llm_pkg], check=True)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM05_FP_REQUIREMENTS_DOCS",
+    "category": "LLM05: Supply Chain",
+    "severity": "LOW",
+    "confidence": 0.53,
+    "description": "Documentation showing requirements.txt snippet",
+    "file_path": "docs/getting_started.md",
+    "code_snippet": "pip install torch==2.2.1",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM05_FP_HASH_VERIFIED",
+    "category": "LLM05: Supply Chain",
+    "severity": "MEDIUM",
+    "confidence": 0.6,
+    "description": "Download guarded by sha256 hash verification",
+    "file_path": "security/downloader.py",
+    "code_snippet": "if sha256(data).hexdigest() != expected_hash: raise",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM06_TP_SECRET_LOG",
+    "category": "LLM06: Sensitive Info",
+    "severity": "CRITICAL",
+    "confidence": 0.91,
+    "description": "LLM response includes AWS keys and writes to log",
+    "file_path": "monitoring/logging.py",
+    "code_snippet": "logger.info(f'Key leaked: {response}')",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM06_TP_PASTE_API_KEY",
+    "category": "LLM06: Sensitive Info",
+    "severity": "HIGH",
+    "confidence": 0.87,
+    "description": "Notebook hardcodes OpenAI key in plain text",
+    "file_path": "notebooks/openai_quickstart.ipynb",
+    "code_snippet": "os.environ['OPENAI_API_KEY'] = 'sk-live-123456789'",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM06_FP_ENV_REFERENCE",
+    "category": "LLM06: Sensitive Info",
+    "severity": "MEDIUM",
+    "confidence": 0.65,
+    "description": "Code references environment variable, no secret literal",
+    "file_path": "config/settings.py",
+    "code_snippet": "OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM06_FP_BASE64_IMAGE",
+    "category": "LLM06: Sensitive Info",
+    "severity": "LOW",
+    "confidence": 0.5,
+    "description": "Base64 logo embedded in docs mistaken for secret",
+    "file_path": "docs/assets/logo.py",
+    "code_snippet": "LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANS...'",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM07_TP_SUBPROCESS_PLUGIN",
+    "category": "LLM07: Insecure Plugin",
+    "severity": "HIGH",
+    "confidence": 0.86,
+    "description": "Plugin executes arbitrary shell command from model output",
+    "file_path": "plugins/shell_tool.py",
+    "code_snippet": "subprocess.run(llm_output, shell=True)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM07_TP_PLUGIN_DOWNLOAD",
+    "category": "LLM07: Insecure Plugin",
+    "severity": "MEDIUM",
+    "confidence": 0.8,
+    "description": "Downloads plugin zip from URL without signature and loads",
+    "file_path": "plugins/manager.py",
+    "code_snippet": "zip_ref.extractall('/opt/plugins')",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM07_FP_VALIDATED_PLUGIN",
+    "category": "LLM07: Insecure Plugin",
+    "severity": "MEDIUM",
+    "confidence": 0.62,
+    "description": "Plugin registry enforces allowlist and signature",
+    "file_path": "plugins/registry.py",
+    "code_snippet": "if plugin_id not in ALLOWED: raise",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM07_FP_DOCS_PLUGIN",
+    "category": "LLM07: Insecure Plugin",
+    "severity": "LOW",
+    "confidence": 0.47,
+    "description": "Documentation describing plugin architecture",
+    "file_path": "docs/plugins.md",
+    "code_snippet": "Install shell plugin by running ./install.sh",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM08_TP_AUTO_FINANCE",
+    "category": "LLM08: Excessive Agency",
+    "severity": "HIGH",
+    "confidence": 0.83,
+    "description": "Agent transfers funds automatically without approval",
+    "file_path": "agents/finance_agent.py",
+    "code_snippet": "bank.transfer(amount, destination, auto_execute=True)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM08_TP_SYSTEM_COMMANDS",
+    "category": "LLM08: Excessive Agency",
+    "severity": "HIGH",
+    "confidence": 0.8,
+    "description": "Agent executes system commands inferred from tasks",
+    "file_path": "agents/task_runner.py",
+    "code_snippet": "os.system(plan['action'])",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM08_FP_APPROVAL_GATE",
+    "category": "LLM08: Excessive Agency",
+    "severity": "MEDIUM",
+    "confidence": 0.66,
+    "description": "Agent requires manual approval before action",
+    "file_path": "agents/controller.py",
+    "code_snippet": "if not require_human_confirmation(task): raise",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM08_FP_DEMO_AGENT",
+    "category": "LLM08: Excessive Agency",
+    "severity": "LOW",
+    "confidence": 0.49,
+    "description": "Demo agent described in README, not live code",
+    "file_path": "examples/autonomous_agent.md",
+    "code_snippet": "agent.run('book a flight')",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM09_TP_AUTO_APPROVE",
+    "category": "LLM09: Overreliance",
+    "severity": "HIGH",
+    "confidence": 0.78,
+    "description": "Decision engine auto-approves LLM answers for compliance",
+    "file_path": "decision/approver.py",
+    "code_snippet": "if model.confidence > 0.2: return 'approved'",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM09_TP_NO_HUMAN_CHECK",
+    "category": "LLM09: Overreliance",
+    "severity": "MEDIUM",
+    "confidence": 0.74,
+    "description": "System ships emails to customers directly from LLM output",
+    "file_path": "workflows/email_broadcast.py",
+    "code_snippet": "send_email(llm_summary, auto_send=True)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM09_FP_HUMAN_REVIEW",
+    "category": "LLM09: Overreliance",
+    "severity": "LOW",
+    "confidence": 0.5,
+    "description": "Workflow collects LLM suggestion but waits for approval",
+    "file_path": "workflows/human_loop.py",
+    "code_snippet": "if not reviewer.signoff(result): return",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM09_FP_TEST_ASSERT",
+    "category": "LLM09: Overreliance",
+    "severity": "LOW",
+    "confidence": 0.45,
+    "description": "Unit test verifying fallback logic",
+    "file_path": "tests/workflows/test_review.py",
+    "code_snippet": "assert pipeline.requires_human_review is True",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM10_TP_MODEL_DOWNLOAD",
+    "category": "LLM10: Model Theft",
+    "severity": "HIGH",
+    "confidence": 0.84,
+    "description": "Endpoint allows downloading raw model weights without auth",
+    "file_path": "api/models.py",
+    "code_snippet": "return send_file('models/primary.bin')",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM10_TP_LOGPROBS",
+    "category": "LLM10: Model Theft",
+    "severity": "MEDIUM",
+    "confidence": 0.76,
+    "description": "API exposes logprobs + tokens enabling extraction",
+    "file_path": "api/completions.py",
+    "code_snippet": "response = client.chat.completions.create(logprobs=True)",
+    "is_true_positive": true
+  },
+  {
+    "id": "LLM10_FP_SIGNED_DOWNLOAD",
+    "category": "LLM10: Model Theft",
+    "severity": "MEDIUM",
+    "confidence": 0.6,
+    "description": "Download requires signed URL and IAM enforcement",
+    "file_path": "api/secure_download.py",
+    "code_snippet": "return generate_signed_url('model.bin', expires=30)",
+    "is_true_positive": false
+  },
+  {
+    "id": "LLM10_FP_DOCS_EXPORT",
+    "category": "LLM10: Model Theft",
+    "severity": "LOW",
+    "confidence": 0.43,
+    "description": "Documentation describing export process, no live endpoint",
+    "file_path": "docs/model_export.md",
+    "code_snippet": "scp model.bin user@host",
+    "is_true_positive": false
+  },
+  {
+    "id": "GENERIC_FP_BASE64_IMAGE",
+    "category": "LLM06: Sensitive Info",
+    "severity": "LOW",
+    "confidence": 0.4,
+    "description": "Base64 encoded asset triggered secret detector",
+    "file_path": "docs/assets/logo.svg",
+    "code_snippet": "SVG_DATA = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0...'",
+    "is_true_positive": false
+  },
+  {
+    "id": "GENERIC_FP_ENV_VAR",
+    "category": "LLM06: Sensitive Info",
+    "severity": "LOW",
+    "confidence": 0.48,
+    "description": "Refers to env var for configuration; no leaked secret",
+    "file_path": "config/defaults.py",
+    "code_snippet": "AZURE_OPENAI_KEY = os.environ.get('AZURE_OPENAI_KEY')",
+    "is_true_positive": false
+  },
+  {
+    "id": "GENERIC_TP_PLACEHOLDER_KEY",
+    "category": "LLM06: Sensitive Info",
+    "severity": "MEDIUM",
+    "confidence": 0.73,
+    "description": "Developer accidentally committed GitHub PAT",
+    "file_path": "notebooks/quickstart.ipynb",
+    "code_snippet": "GITHUB_TOKEN = 'ghp_9qweasd1234567890'",
+    "is_true_positive": true
+  },
+  {
+    "id": "GENERIC_FP_MODEL_EVAL",
+    "category": "LLM03: Training Poisoning",
+    "severity": "LOW",
+    "confidence": 0.46,
+    "description": "torch.nn.Module.eval call is false positive for eval",
+    "file_path": "models/base.py",
+    "code_snippet": "self.language_model.eval()",
+    "is_true_positive": false
+  }
+]
