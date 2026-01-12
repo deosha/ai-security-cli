@@ -127,6 +127,17 @@ def main():
     is_flag=True,
     help="Quiet mode: suppress banners and spinners, output only results (useful for CI/CD)",
 )
+@click.option(
+    "--fp-reduction/--no-fp-reduction",
+    default=True,
+    help="Enable heuristic-based false positive filtering (default: enabled)",
+)
+@click.option(
+    "--fp-threshold",
+    type=float,
+    default=None,
+    help="Minimum TP probability to keep findings (0.0-1.0, default: 0.4)",
+)
 def scan(
     path: str,
     output: str,
@@ -143,6 +154,8 @@ def scan(
     exclude_tests: bool,
     demote_tests: bool,
     quiet: bool,
+    fp_reduction: bool,
+    fp_threshold: Optional[float],
 ):
     """
     Perform static code analysis for security vulnerabilities.
@@ -224,6 +237,9 @@ def scan(
         cli_options['mode'] = mode
     cli_options['exclude_tests'] = exclude_tests
     cli_options['demote_tests'] = demote_tests
+    cli_options['fp_reduction'] = fp_reduction
+    if fp_threshold is not None:
+        cli_options['fp_threshold'] = fp_threshold
 
     # Load config with precedence: CLI > env > yaml > defaults
     config_path = Path(config) if config else None

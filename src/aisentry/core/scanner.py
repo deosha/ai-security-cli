@@ -337,8 +337,10 @@ class StaticScanner:
         if self.config.dedup == 'exact':
             all_findings = self._deduplicate_exact(all_findings)
 
-        # Apply ML-based false positive reduction
-        all_findings = self._apply_fp_reduction(all_findings)
+        # Apply heuristic-based false positive reduction (if enabled)
+        fp_stats = {}
+        if self.config.fp_reduction:
+            all_findings, fp_stats = self._apply_fp_reduction(all_findings)
 
         category_scores = self._run_scorers(parsed_data, all_findings)
 
@@ -357,6 +359,7 @@ class StaticScanner:
             confidence=self._calculate_scan_confidence(all_findings, category_scores),
             files_scanned=1,
             duration_seconds=duration,
+            metadata={'fp_reduction': fp_stats} if fp_stats.get('filtered', 0) > 0 else None,
         )
 
     def _should_skip_path(self, file_path: Path) -> bool:
@@ -468,24 +471,35 @@ class StaticScanner:
 
         return merged_findings
 
-    def _apply_fp_reduction(self, findings: List[Finding]) -> List[Finding]:
+    def _apply_fp_reduction(self, findings: List[Finding]) -> Tuple[List[Finding], Dict[str, Any]]:
         """
-        Apply ML-based false positive reduction to findings.
+        Apply heuristic-based false positive reduction to findings.
 
         Filters out likely false positives such as:
         - session.exec() (SQLAlchemy, not Python exec)
         - model.eval() (PyTorch, not Python eval)
         - Placeholder/example values
         - Base64 encoded images
-        """
-        if not findings:
-            return findings
 
-        # Convert to FP reducer format
+        Returns:
+            Tuple of (filtered_findings, reduction_stats)
+        """
+        empty_stats = {'filtered': 0, 'kept': 0, 'total': 0, 'reduction_pct': 0.0, 'filter_reasons': {}}
+
+        if not findings:
+            return findings, empty_stats
+
+        # Convert to FP reducer format, using index as fallback ID
         fp_findings = []
-        for f in findings:
+        id_to_index = {}  # Map generated IDs to original indices
+
+        for idx, f in enumerate(findings):
+            # Use stable ID: original ID if present, otherwise generate from content
+            stable_id = f.id if f.id else f"finding_{idx}_{hash((f.file_path, f.line_number, f.category))}"
+            id_to_index[stable_id] = idx
+
             fp_findings.append(FPFinding(
-                id=f.id or '',
+                id=stable_id,
                 category=f.category or '',
                 severity=f.severity.value if f.severity else 'MEDIUM',
                 confidence=f.confidence,
@@ -495,21 +509,28 @@ class StaticScanner:
                 code_snippet=f.code_snippet or '',
             ))
 
-        # Filter using FP reducer (threshold 0.4 = 40% TP probability minimum)
-        filtered_fp, scores = self.fp_reducer.filter_findings(fp_findings, threshold=0.4, return_scores=True)
+        # Filter using FP reducer
+        filtered_fp, scores = self.fp_reducer.filter_findings(
+            fp_findings,
+            threshold=self.config.fp_threshold if hasattr(self.config, 'fp_threshold') else 0.4,
+            return_scores=True
+        )
 
-        # Get IDs of findings to keep
-        keep_ids = {f.id for f in filtered_fp}
+        # Get indices of findings to keep
+        keep_indices = {id_to_index[f.id] for f in filtered_fp if f.id in id_to_index}
 
-        # Filter original findings
-        filtered = [f for f in findings if f.id in keep_ids]
+        # Filter original findings by index
+        filtered = [f for idx, f in enumerate(findings) if idx in keep_indices]
+
+        # Build reduction stats for metadata
+        stats = self.fp_reducer.get_stats(fp_findings, threshold=0.4)
 
         # Log reduction stats if verbose
         if self.verbose and len(findings) > len(filtered):
             reduction = len(findings) - len(filtered)
             logger.info(f"FP reducer filtered {reduction} likely false positives ({reduction/len(findings)*100:.1f}%)")
 
-        return filtered
+        return filtered, stats
 
     def _merge_findings(self, findings: List[Finding]) -> Finding:
         """Merge multiple findings into one, preserving best evidence."""
@@ -602,8 +623,10 @@ class StaticScanner:
         # Apply test file confidence demotion
         all_findings = self._apply_test_demotion(all_findings)
 
-        # Apply ML-based false positive reduction
-        all_findings = self._apply_fp_reduction(all_findings)
+        # Apply heuristic-based false positive reduction (if enabled)
+        fp_stats = {}
+        if self.config.fp_reduction:
+            all_findings, fp_stats = self._apply_fp_reduction(all_findings)
 
         # Filter by threshold after demotion and FP reduction
         all_findings = [f for f in all_findings if f.confidence >= self.config.global_threshold]
@@ -621,6 +644,11 @@ class StaticScanner:
 
         duration = time.time() - start_time
 
+        # Build metadata with FP reduction stats
+        metadata = {}
+        if fp_stats.get('filtered', 0) > 0:
+            metadata['fp_reduction'] = fp_stats
+
         return ScanResult(
             target_path=str(directory),
             findings=all_findings,
@@ -629,6 +657,7 @@ class StaticScanner:
             confidence=self._calculate_scan_confidence(all_findings, category_scores),
             files_scanned=len(all_parsed_data),
             duration_seconds=duration,
+            metadata=metadata if metadata else None,
         )
 
     def _aggregate_parsed_data(self, parsed_data_list: List[Dict[str, Any]]) -> Dict[str, Any]:

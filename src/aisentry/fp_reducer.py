@@ -1,16 +1,37 @@
 """
-FP Reducer - Ensemble ML-based false positive reduction for aisentry
+FP Reducer - Heuristic-based false positive reduction for aisentry
 
-This module uses multiple approaches to score findings and filter likely false positives:
-1. Rule-based heuristics (fast, no dependencies)
-2. ML classifier (requires scikit-learn, needs training data)
-3. LLM verification (requires API key, most accurate but costly)
+This module filters likely false positives using pattern matching and heuristics.
+By default, only rule-based heuristics are active. Optional ML and LLM modes
+require additional setup.
+
+Approaches:
+1. Rule-based heuristics (default, always active):
+   - Detects session.exec() vs Python exec()
+   - Detects model.eval() vs Python eval()
+   - Filters placeholder/example values
+   - Reduces confidence for test/docs/vendor files
+
+2. ML classifier (optional, requires scikit-learn + training data):
+   - Train with labeled findings via FPReducer.train()
+   - Load saved model via model_path parameter
+
+3. LLM verification (optional, requires ANTHROPIC_API_KEY):
+   - Only used for HIGH/CRITICAL findings above threshold
+   - Adds cost per verification call
 
 Usage:
     from aisentry.fp_reducer import FPReducer
 
-    reducer = FPReducer(use_ml=True, use_llm=False)
-    filtered_findings = reducer.filter_findings(findings, threshold=0.4)
+    # Default: heuristics only
+    reducer = FPReducer()
+    filtered = reducer.filter_findings(findings, threshold=0.4)
+
+    # With ML model
+    reducer = FPReducer(use_ml=True, model_path="fp_model.pkl")
+
+    # With LLM verification for high-severity
+    reducer = FPReducer(use_llm=True, llm_threshold=0.5)
 """
 
 import json

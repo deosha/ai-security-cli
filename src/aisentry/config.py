@@ -58,6 +58,8 @@ class ScanConfig:
     exclude_tests: bool = False  # If True, skip test files entirely
     demote_tests: bool = True  # If True, reduce confidence for test file findings
     test_confidence_penalty: float = 0.25  # Confidence reduction for test files
+    fp_threshold: float = 0.4  # Minimum TP probability to keep (FP reduction)
+    fp_reduction: bool = True  # Enable heuristic-based false positive reduction
 
     def __post_init__(self):
         # Apply defaults for any missing thresholds
@@ -261,4 +263,6 @@ def load_config(
         exclude_tests=merged.get('exclude_tests', False),
         demote_tests=merged.get('demote_tests', True),
         test_confidence_penalty=merged.get('test_confidence_penalty', 0.25),
+        fp_threshold=merged.get('fp_threshold', 0.4),
+        fp_reduction=merged.get('fp_reduction', True),
     )
