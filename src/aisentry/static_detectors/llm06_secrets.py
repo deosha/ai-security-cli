@@ -162,18 +162,28 @@ class SecretsDetector(BaseDetector):
         'credit_card', 'cc_number', 'social_security'
     }
 
-    # Safe patterns to exclude (environment variables, config references)
+    # Safe patterns to exclude (reading from environment/config is safe)
+    # NOTE: os.environ.get() and os.getenv() are safe (reading from env)
+    # but os.environ["X"] = "value" is NOT safe (setting hardcoded value)
     SAFE_PATTERNS = {
-        'os.getenv', 'os.environ', 'env.get', 'config.get',
-        'settings.', 'ENV[', 'process.env', 'System.getenv',
-        'dotenv', 'load_dotenv', '.env'
+        'os.getenv', 'os.environ.get', 'env.get', 'config.get',
+        'settings.', 'process.env', 'System.getenv',
+        'dotenv', 'load_dotenv'
     }
 
+    # Pattern for hardcoded env var assignment (VULNERABLE)
+    HARDCODED_ENV_PATTERN = re.compile(
+        r'os\.environ\s*\[\s*["\']([^"\']+)["\']\s*\]\s*=\s*["\']([^"\']+)["\']',
+        re.IGNORECASE
+    )
+
     # Pattern to find keyword arguments with secret-like names (catches what detect-secrets misses)
-    # Matches: password="value", secret="value", api_key="value", etc.
+    # Matches: password="value", secret="value", api_key="value", db_pass="value", etc.
     KEYWORD_ARG_SECRET_PATTERN = re.compile(
         r'\b(password|passwd|pwd|secret|api_key|apikey|token|auth_token|'
-        r'access_token|private_key|client_secret|secret_key)\s*=\s*["\']([^"\']+)["\']',
+        r'access_token|private_key|client_secret|secret_key|'
+        r'db_pass|db_password|db_pwd|database_password|database_pass|'
+        r'mysql_password|postgres_password|redis_password|mongo_password)\s*=\s*["\']([^"\']+)["\']',
         re.IGNORECASE
     )
 
@@ -250,6 +260,18 @@ class SecretsDetector(BaseDetector):
         # 7. Check for sensitive data logging
         findings.extend(self._check_sensitive_logging(functions, assignments, source_lines, file_path))
 
+        # 8. Check for hardcoded env var assignments (os.environ["X"] = "secret")
+        for f in self._check_hardcoded_env_assignments(source_lines, file_path):
+            if f.line_number not in found_lines:
+                findings.append(f)
+                found_lines.add(f.line_number)
+
+        # 9. Check for keyword-style credential assignments (db_pass = "secret")
+        for f in self._check_keyword_credentials(source_lines, file_path):
+            if f.line_number not in found_lines:
+                findings.append(f)
+                found_lines.add(f.line_number)
+
         return findings
 
     def _scan_with_detect_secrets(
@@ -269,8 +291,10 @@ class SecretsDetector(BaseDetector):
                 secrets = list(scan_file(file_path))
 
                 for secret in secrets:
-                    # Skip test files for certain detectors
-                    if 'test' in file_path.lower() and secret.type == 'Secret Keyword':
+                    # Skip test files for certain detectors (but not 'testbed' directories)
+                    basename = Path(file_path).name.lower()
+                    if ('test_' in basename or '_test.' in basename or basename.endswith('_test.py')) \
+                            and secret.type == 'Secret Keyword':
                         continue
 
                     # Get code snippet
@@ -549,6 +573,155 @@ class SecretsDetector(BaseDetector):
             evidence=evidence
         )
 
+    def _check_hardcoded_env_assignments(
+        self,
+        source_lines: List[str],
+        file_path: str
+    ) -> List[Finding]:
+        """
+        Detect hardcoded values assigned to environment variables.
+
+        This catches patterns like:
+            os.environ["AWS_ACCESS_KEY_ID"] = "AKIA..."
+            os.environ["SECRET_KEY"] = "hardcoded_value"
+
+        These are dangerous because they embed secrets in source code
+        while appearing to use environment variables.
+        """
+        findings = []
+
+        # Known credential env var names
+        SENSITIVE_ENV_VARS = {
+            'aws_access_key_id', 'aws_secret_access_key', 'aws_session_token',
+            'azure_storage_key', 'azure_subscription_id', 'azure_tenant_id',
+            'google_api_key', 'google_application_credentials',
+            'openai_api_key', 'anthropic_api_key', 'cohere_api_key',
+            'database_url', 'db_password', 'db_pass', 'mysql_password',
+            'postgres_password', 'redis_password', 'mongo_password',
+            'secret_key', 'private_key', 'api_key', 'auth_token',
+            'access_token', 'refresh_token', 'jwt_secret',
+        }
+
+        for idx, line in enumerate(source_lines):
+            match = self.HARDCODED_ENV_PATTERN.search(line)
+            if match:
+                env_var_name = match.group(1)
+                env_var_value = match.group(2)
+
+                # Skip placeholder values
+                if self._is_placeholder_value(env_var_value):
+                    continue
+
+                # Higher severity for known credential env vars
+                env_var_lower = env_var_name.lower()
+                is_known_secret = any(
+                    known in env_var_lower for known in SENSITIVE_ENV_VARS
+                )
+
+                line_num = idx + 1
+                snippet = self._get_code_snippet(source_lines, line_num)
+
+                findings.append(Finding(
+                    id=f"LLM06_{file_path}_{line_num}_env_hardcode",
+                    category="LLM06: Sensitive Information Disclosure",
+                    severity=Severity.CRITICAL if is_known_secret else Severity.HIGH,
+                    confidence=0.9 if is_known_secret else 0.75,
+                    title=f"Hardcoded credential in environment variable assignment",
+                    description=(
+                        f"Environment variable '{env_var_name}' is being set to a hardcoded "
+                        f"value on line {line_num}. This defeats the purpose of using environment "
+                        f"variables for secrets and exposes credentials in source code."
+                    ),
+                    file_path=file_path,
+                    line_number=line_num,
+                    code_snippet=snippet,
+                    recommendation=(
+                        "Remove hardcoded environment variable assignments:\n"
+                        "1. Set environment variables externally (shell, .env file, CI/CD)\n"
+                        "2. Use os.getenv() to READ from environment, never SET hardcoded values\n"
+                        "3. Use secret management (AWS Secrets Manager, HashiCorp Vault)\n"
+                        "4. For local dev, use .env files (not committed to git)\n"
+                        "5. Rotate the exposed credential immediately"
+                    )
+                ))
+
+        return findings
+
+    def _check_keyword_credentials(
+        self,
+        source_lines: List[str],
+        file_path: str
+    ) -> List[Finding]:
+        """
+        Detect hardcoded credentials in keyword-style assignments.
+
+        This catches patterns like:
+            db_pass = "P@ssw0rd123!"
+            mysql_password = "secret123"
+
+        Filters out placeholder values like "secret", "password", "changeme".
+        """
+        findings = []
+
+        for idx, line in enumerate(source_lines):
+            match = self.KEYWORD_ARG_SECRET_PATTERN.search(line)
+            if match:
+                var_name = match.group(1)
+                value = match.group(2)
+
+                # Skip placeholder values
+                if self._is_placeholder_value(value):
+                    continue
+
+                # Skip safe references (env vars, config)
+                if self._is_safe_reference(line):
+                    continue
+
+                line_num = idx + 1
+                snippet = self._get_code_snippet(source_lines, line_num)
+
+                findings.append(Finding(
+                    id=f"LLM06_{file_path}_{line_num}_keyword_cred",
+                    category="LLM06: Sensitive Information Disclosure",
+                    severity=Severity.HIGH,
+                    confidence=0.85,
+                    title=f"Hardcoded {var_name} credential detected",
+                    description=(
+                        f"Variable '{var_name}' on line {line_num} contains a hardcoded "
+                        f"credential value. This exposes sensitive data in source code."
+                    ),
+                    file_path=file_path,
+                    line_number=line_num,
+                    code_snippet=snippet,
+                    recommendation=(
+                        "Remove hardcoded credentials:\n"
+                        "1. Use environment variables: os.getenv('DB_PASSWORD')\n"
+                        "2. Use secret management (AWS Secrets Manager, HashiCorp Vault)\n"
+                        "3. Use configuration files (not committed to git)\n"
+                        "4. Rotate the exposed credential immediately"
+                    )
+                ))
+
+        return findings
+
+    def _is_placeholder_value(self, value: str) -> bool:
+        """Check if value is a placeholder/example value that shouldn't trigger alerts."""
+        if not value:
+            return True
+
+        value_lower = value.lower()
+
+        # Check exact matches
+        if value_lower in self.SAFE_PLACEHOLDER_VALUES:
+            return True
+
+        # Check regex patterns
+        for pattern in self.SAFE_PLACEHOLDER_PATTERNS:
+            if pattern.match(value):
+                return True
+
+        return False
+
     def _is_safe_reference(self, value: str) -> bool:
         """Check if value is a safe reference (env var, config)"""
         value_lower = value.lower()
@@ -799,12 +972,24 @@ class SecretsDetector(BaseDetector):
         Calculate confidence based on evidence
 
         Scoring varies by detection type:
+        - detect-secrets findings: 0.85 (trusted library)
         - Hardcoded secrets: entropy + variable name + format pattern
         - Secret in prompt: 0.8 base (high confidence when taint flows to LLM)
         - Sensitive system prompt: 0.75 base
         - Sensitive logging: 0.7 base
         """
         detection_type = evidence.get('detection_type', '')
+
+        # detect-secrets library findings are trusted
+        if evidence.get('detector') == 'detect-secrets':
+            secret_type = evidence.get('secret_type', '')
+            # Higher confidence for specific secret types, lower for generic
+            if secret_type in ('AWS Access Key', 'OpenAI API Key', 'GitHub Token'):
+                return 0.9
+            elif secret_type in ('Secret Keyword', 'Basic Auth Credentials'):
+                return 0.75  # Slightly above threshold
+            else:
+                return 0.8
 
         # Handle new detection types
         if detection_type == 'secret_in_prompt':

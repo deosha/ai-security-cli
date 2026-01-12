@@ -146,8 +146,8 @@ class SupplyChainDetector(BaseDetector):
     UNSAFE_LOADING_PATTERNS = [
         # HuggingFace trust_remote_code
         (r'trust_remote_code\s*=\s*True', 'trust_remote_code=True enables arbitrary code execution'),
-        # PyTorch unsafe load
-        (r'torch\.load\s*\([^)]*\)(?!\s*.*weights_only)', 'torch.load without weights_only=True can execute arbitrary code'),
+        # PyTorch unsafe load - negative lookahead INSIDE to check args don't contain weights_only
+        (r'torch\.load\s*\((?![^)]*weights_only)[^)]*\)', 'torch.load without weights_only=True can execute arbitrary code'),
         # Joblib load
         (r'joblib\.load\s*\(', 'joblib.load can execute arbitrary code from untrusted files'),
     ]
