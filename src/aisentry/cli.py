@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from importlib.metadata import version as get_version
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -34,8 +35,16 @@ def setup_logging(verbose: bool):
     )
 
 
+def _get_version():
+    """Get version from package metadata."""
+    try:
+        return get_version("aisentry")
+    except Exception:
+        return "unknown"
+
+
 @click.group()
-@click.version_option(version="1.0.0b1", prog_name="aisentry")
+@click.version_option(version=_get_version(), prog_name="aisentry")
 def main():
     """
     aisentry - Security scanning and testing for AI/LLM applications.

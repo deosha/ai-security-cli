@@ -181,7 +181,7 @@ LOW_RISK_PATHS = [
 
 # Category risk weights (higher = more likely to be real vulnerability)
 CATEGORY_RISK = {
-    'LLM01': 0.5,  # Prompt Injection - filter only low-confidence findings
+    'LLM01': 0.7,  # Prompt Injection - high risk, core OWASP LLM vulnerability
     'LLM02': 0.7,  # Insecure Output Handling - usually real
     'LLM03': 0.5,  # Training Data Poisoning
     'LLM04': 0.2,  # Model Denial of Service - often FP in frameworks
@@ -304,22 +304,37 @@ class FPReducer:
         score = features['static_confidence'] * features['category_risk']
         reasons = []
 
-        # Apply penalties for FP indicators - file path based
+        # CRITICAL severity findings skip file path penalties to ensure they're always shown
+        is_critical = features['severity_score'] >= 1.0
+
+        # Apply penalties for FP indicators - file path based (reduced for critical)
         if features['is_test_file']:
-            score *= 0.3
-            reasons.append("test file (-70%)")
+            if is_critical:
+                score *= 0.7  # Reduced penalty for critical findings
+                reasons.append("test file (-30%, reduced for critical)")
+            else:
+                score *= 0.3
+                reasons.append("test file (-70%)")
 
         if features['is_example_file']:
-            score *= 0.4
-            reasons.append("example file (-60%)")
+            if is_critical:
+                score *= 0.7
+                reasons.append("example file (-30%, reduced for critical)")
+            else:
+                score *= 0.4
+                reasons.append("example file (-60%)")
 
         if features['is_vendor_file']:
             score *= 0.2
             reasons.append("vendor file (-80%)")
 
         if features['is_docs_file']:
-            score *= 0.3
-            reasons.append("docs file (-70%)")
+            if is_critical:
+                score *= 0.7
+                reasons.append("docs file (-30%, reduced for critical)")
+            else:
+                score *= 0.3
+                reasons.append("docs file (-70%)")
 
         # Apply penalties for FP indicators - original patterns
         if features['has_session_exec']:
