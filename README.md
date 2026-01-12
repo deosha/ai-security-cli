@@ -29,7 +29,7 @@ Evaluated against a comprehensive OWASP LLM Top 10 testbed with 73 ground-truth 
 | LLM06: Sensitive Info | 62.5% | 0% | 0% |
 | LLM10: Model Theft | 44.4% | 0% | 0% |
 
-> See [docs/tool_comparison.md](docs/tool_comparison.md) for detailed comparison and [llm-sec-eval](https://github.com/deosha/llm-sec-eval) for methodology.
+> See [docs/tool_comparison.md](https://github.com/deosha/aisentry/blob/main/docs/tool_comparison.md) for detailed comparison and [llm-sec-eval](https://github.com/deosha/llm-sec-eval) for methodology.
 
 ## Features
 
@@ -75,11 +75,11 @@ For runtime testing of LLM models (prompt injection, jailbreaks), we recommend [
 
 | Topic | Link |
 |-------|------|
-| CLI Reference | [docs/cli.md](docs/cli.md) |
-| Configuration | [docs/configuration.md](docs/configuration.md) |
-| Architecture | [docs/architecture.md](docs/architecture.md) |
-| CI/CD Integration | [docs/integration.md](docs/integration.md) |
-| Tool Comparison | [docs/tool_comparison.md](docs/tool_comparison.md) |
+| CLI Reference | [docs/cli.md](https://github.com/deosha/aisentry/blob/main/docs/cli.md) |
+| Configuration | [docs/configuration.md](https://github.com/deosha/aisentry/blob/main/docs/configuration.md) |
+| Architecture | [docs/architecture.md](https://github.com/deosha/aisentry/blob/main/docs/architecture.md) |
+| CI/CD Integration | [docs/integration.md](https://github.com/deosha/aisentry/blob/main/docs/integration.md) |
+| Tool Comparison | [docs/tool_comparison.md](https://github.com/deosha/aisentry/blob/main/docs/tool_comparison.md) |
 
 ## GitHub Actions
 
@@ -91,7 +91,7 @@ For runtime testing of LLM models (prompt injection, jailbreaks), we recommend [
     sarif_file: results.sarif
 ```
 
-See [docs/integration.md](docs/integration.md) for GitLab, Azure DevOps, and pre-commit examples.
+See [docs/integration.md](https://github.com/deosha/aisentry/blob/main/docs/integration.md) for GitLab, Azure DevOps, and pre-commit examples.
 
 ## Development
 
