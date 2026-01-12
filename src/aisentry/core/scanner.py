@@ -38,6 +38,7 @@ from aisentry.static_detectors import (
     TrainingPoisoningDetector,
 )
 from aisentry.utils.scoring import calculate_overall_score
+from aisentry.fp_reducer import FPReducer, Finding as FPFinding
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,9 @@ class StaticScanner:
 
         self.owasp_scorer = OWASPScorer(verbose=verbose)
 
+        # Initialize FP reducer for automatic false positive filtering
+        self.fp_reducer = FPReducer(use_ml=False, use_llm=False)
+
     def _init_detectors(self) -> List:
         """
         Initialize detectors with per-category thresholds from config.
@@ -332,6 +336,9 @@ class StaticScanner:
         # Apply deduplication
         if self.config.dedup == 'exact':
             all_findings = self._deduplicate_exact(all_findings)
+
+        # Apply ML-based false positive reduction
+        all_findings = self._apply_fp_reduction(all_findings)
 
         category_scores = self._run_scorers(parsed_data, all_findings)
 
@@ -461,6 +468,49 @@ class StaticScanner:
 
         return merged_findings
 
+    def _apply_fp_reduction(self, findings: List[Finding]) -> List[Finding]:
+        """
+        Apply ML-based false positive reduction to findings.
+
+        Filters out likely false positives such as:
+        - session.exec() (SQLAlchemy, not Python exec)
+        - model.eval() (PyTorch, not Python eval)
+        - Placeholder/example values
+        - Base64 encoded images
+        """
+        if not findings:
+            return findings
+
+        # Convert to FP reducer format
+        fp_findings = []
+        for f in findings:
+            fp_findings.append(FPFinding(
+                id=f.id or '',
+                category=f.category or '',
+                severity=f.severity.value if f.severity else 'MEDIUM',
+                confidence=f.confidence,
+                description=f.description or '',
+                file_path=f.file_path or '',
+                line_number=f.line_number or 0,
+                code_snippet=f.code_snippet or '',
+            ))
+
+        # Filter using FP reducer (threshold 0.4 = 40% TP probability minimum)
+        filtered_fp, scores = self.fp_reducer.filter_findings(fp_findings, threshold=0.4, return_scores=True)
+
+        # Get IDs of findings to keep
+        keep_ids = {f.id for f in filtered_fp}
+
+        # Filter original findings
+        filtered = [f for f in findings if f.id in keep_ids]
+
+        # Log reduction stats if verbose
+        if self.verbose and len(findings) > len(filtered):
+            reduction = len(findings) - len(filtered)
+            logger.info(f"FP reducer filtered {reduction} likely false positives ({reduction/len(findings)*100:.1f}%)")
+
+        return filtered
+
     def _merge_findings(self, findings: List[Finding]) -> Finding:
         """Merge multiple findings into one, preserving best evidence."""
         if len(findings) == 1:
@@ -552,7 +602,10 @@ class StaticScanner:
         # Apply test file confidence demotion
         all_findings = self._apply_test_demotion(all_findings)
 
-        # Filter by threshold after demotion
+        # Apply ML-based false positive reduction
+        all_findings = self._apply_fp_reduction(all_findings)
+
+        # Filter by threshold after demotion and FP reduction
         all_findings = [f for f in all_findings if f.confidence >= self.config.global_threshold]
 
         if self.verbose and skipped_count > 0:
