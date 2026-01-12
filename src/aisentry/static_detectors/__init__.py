@@ -1,4 +1,4 @@
-"""Static security detectors for OWASP LLM Top 10"""
+"""Static security detectors for OWASP LLM Top 10 + Traditional Vulnerabilities"""
 
 from .base_detector import BaseDetector
 from .llm01_prompt_injection import PromptInjectionDetector
@@ -11,6 +11,7 @@ from .llm07_insecure_plugin import InsecurePluginDetector
 from .llm08_excessive_agency import ExcessiveAgencyDetector
 from .llm09_overreliance import OverrelianceDetector
 from .llm10_model_theft import ModelTheftDetector
+from .sql_injection import SQLInjectionDetector
 
 # All available static detectors
 ALL_DETECTORS = [
@@ -24,6 +25,7 @@ ALL_DETECTORS = [
     ExcessiveAgencyDetector,
     OverrelianceDetector,
     ModelTheftDetector,
+    SQLInjectionDetector,
 ]
 
 # Detector ID to class mapping
@@ -38,6 +40,7 @@ DETECTOR_MAP = {
     "LLM08": ExcessiveAgencyDetector,
     "LLM09": OverrelianceDetector,
     "LLM10": ModelTheftDetector,
+    "SQLI": SQLInjectionDetector,
 }
 
 __all__ = [
@@ -52,6 +55,7 @@ __all__ = [
     "ExcessiveAgencyDetector",
     "OverrelianceDetector",
     "ModelTheftDetector",
+    "SQLInjectionDetector",
     "ALL_DETECTORS",
     "DETECTOR_MAP",
 ]

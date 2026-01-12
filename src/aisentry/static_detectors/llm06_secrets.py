@@ -7,19 +7,41 @@ Detects hardcoded secrets in code:
 - Private keys and certificates
 - Database credentials
 
-Uses entropy analysis + pattern matching for high accuracy.
+Uses detect-secrets library + custom patterns for comprehensive detection.
 """
 
 import logging
 import math
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from detect_secrets.core.scan import scan_file
+from detect_secrets.settings import transient_settings
 
 from aisentry.models.finding import Finding, Severity
 from aisentry.static_detectors.base_detector import BaseDetector
 
 logger = logging.getLogger(__name__)
+
+# detect-secrets plugins to use
+DETECT_SECRETS_PLUGINS = [
+    {'name': 'AWSKeyDetector'},
+    {'name': 'AzureStorageKeyDetector'},
+    {'name': 'BasicAuthDetector'},
+    {'name': 'GitHubTokenDetector'},
+    {'name': 'GitLabTokenDetector'},
+    {'name': 'Base64HighEntropyString'},
+    {'name': 'HexHighEntropyString'},
+    {'name': 'JwtTokenDetector'},
+    {'name': 'KeywordDetector'},
+    {'name': 'OpenAIDetector'},
+    {'name': 'PrivateKeyDetector'},
+    {'name': 'SlackDetector'},
+    {'name': 'StripeDetector'},
+    {'name': 'TwilioKeyDetector'},
+]
 
 
 @dataclass
@@ -147,6 +169,33 @@ class SecretsDetector(BaseDetector):
         'dotenv', 'load_dotenv', '.env'
     }
 
+    # Pattern to find keyword arguments with secret-like names (catches what detect-secrets misses)
+    # Matches: password="value", secret="value", api_key="value", etc.
+    KEYWORD_ARG_SECRET_PATTERN = re.compile(
+        r'\b(password|passwd|pwd|secret|api_key|apikey|token|auth_token|'
+        r'access_token|private_key|client_secret|secret_key)\s*=\s*["\']([^"\']+)["\']',
+        re.IGNORECASE
+    )
+
+    # Placeholder values that are safe (defaults/examples) - exact matches
+    SAFE_PLACEHOLDER_VALUES = {
+        'password', 'secret', 'changeme',
+        'your_password', 'your_secret', 'your-password', 'your-secret',
+        'none', 'null', '', 'test', 'example', 'placeholder', 'default',
+        'secret-key', 'secretkey', 'my-secret', 'mysecret', 'super-secret',
+        'admin', 'root', 'user', 'guest', 'demo', 'sample',
+    }
+
+    # Placeholder patterns (regex) - matches xxx, xxxx, *****, etc.
+    SAFE_PLACEHOLDER_PATTERNS = [
+        re.compile(r'^x+$', re.IGNORECASE),        # xxx, xxxx, XXXX
+        re.compile(r'^\*+$'),                       # ***, ****
+        re.compile(r'^\.+$'),                       # ..., ....
+        re.compile(r'^<[^>]+>$'),                   # <your-secret>, <API_KEY>
+        re.compile(r'^\$\{[^}]+\}$'),               # ${SECRET}, ${PASSWORD}
+        re.compile(r'^%\([^)]+\)s$'),               # %(password)s
+    ]
+
     def _gather_potential_findings(self, parsed_data: Dict[str, Any]) -> List[Finding]:
         """Find all potential hardcoded secrets and sensitive data exposure"""
         findings = []
@@ -162,17 +211,35 @@ class SecretsDetector(BaseDetector):
         # Get line numbers of LLM calls to avoid duplicate detection
         llm_call_lines = {call['line'] for call in llm_calls}
 
+        # 0. Use detect-secrets for comprehensive secret detection
+        findings.extend(self._scan_with_detect_secrets(file_path, source_lines))
+
+        # Track lines already found by detect-secrets to avoid duplicates
+        found_lines = {f.line_number for f in findings}
+
         # 1. Check assignments for secrets (skip LLM call lines - handled separately)
-        findings.extend(self._check_assignments(assignments, source_lines, file_path, llm_call_lines))
+        for f in self._check_assignments(assignments, source_lines, file_path, llm_call_lines):
+            if f.line_number not in found_lines:
+                findings.append(f)
+                found_lines.add(f.line_number)
 
         # 2. Check LLM API call arguments for secrets (more specific context)
-        findings.extend(self._check_llm_call_args(llm_calls, source_lines, file_path))
+        for f in self._check_llm_call_args(llm_calls, source_lines, file_path):
+            if f.line_number not in found_lines:
+                findings.append(f)
+                found_lines.add(f.line_number)
 
         # 3. Check f-strings for embedded secrets
-        findings.extend(self._check_string_operations(string_ops, source_lines, file_path))
+        for f in self._check_string_operations(string_ops, source_lines, file_path):
+            if f.line_number not in found_lines:
+                findings.append(f)
+                found_lines.add(f.line_number)
 
         # 4. Check class attributes (common place for API keys)
-        findings.extend(self._check_class_attributes(classes, source_lines, file_path))
+        for f in self._check_class_attributes(classes, source_lines, file_path):
+            if f.line_number not in found_lines:
+                findings.append(f)
+                found_lines.add(f.line_number)
 
         # 5. Check for secrets/PII flowing into prompts
         findings.extend(self._check_secrets_in_prompts(functions, llm_calls, assignments, source_lines, file_path))
@@ -182,6 +249,68 @@ class SecretsDetector(BaseDetector):
 
         # 7. Check for sensitive data logging
         findings.extend(self._check_sensitive_logging(functions, assignments, source_lines, file_path))
+
+        return findings
+
+    def _scan_with_detect_secrets(
+        self,
+        file_path: str,
+        source_lines: List[str]
+    ) -> List[Finding]:
+        """Use detect-secrets library for comprehensive secret detection."""
+        findings = []
+
+        # Skip if file doesn't exist (e.g., in-memory parsing)
+        if not file_path or file_path == 'unknown' or not Path(file_path).exists():
+            return findings
+
+        try:
+            with transient_settings({'plugins_used': DETECT_SECRETS_PLUGINS}):
+                secrets = list(scan_file(file_path))
+
+                for secret in secrets:
+                    # Skip test files for certain detectors
+                    if 'test' in file_path.lower() and secret.type == 'Secret Keyword':
+                        continue
+
+                    # Get code snippet
+                    line_num = secret.line_number
+                    snippet = self._get_code_snippet(source_lines, line_num)
+
+                    # Map severity based on secret type
+                    severity = Severity.CRITICAL
+                    if secret.type in ('Base64 High Entropy String', 'Hex High Entropy String'):
+                        severity = Severity.HIGH
+
+                    findings.append(Finding(
+                        id=f"LLM06_DS_{file_path}_{line_num}",
+                        category="LLM06: Sensitive Information Disclosure",
+                        severity=severity,
+                        confidence=0.85,
+                        title=f"Hardcoded secret detected: {secret.type}",
+                        description=(
+                            f"detect-secrets found a potential {secret.type} on line {line_num}. "
+                            f"Hardcoded secrets in source code can be extracted from version control, "
+                            f"compiled binaries, or by anyone with code access."
+                        ),
+                        file_path=file_path,
+                        line_number=line_num,
+                        code_snippet=snippet,
+                        recommendation=(
+                            "Remove hardcoded secrets:\n"
+                            "1. Use environment variables: os.getenv('SECRET_KEY')\n"
+                            "2. Use secret management (AWS Secrets Manager, HashiCorp Vault)\n"
+                            "3. Use .env files (not committed to git)\n"
+                            "4. Rotate the exposed credential immediately"
+                        ),
+                        evidence={
+                            'secret_type': secret.type,
+                            'detector': 'detect-secrets',
+                        }
+                    ))
+
+        except Exception as e:
+            logger.debug(f"detect-secrets scan failed for {file_path}: {e}")
 
         return findings
 

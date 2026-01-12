@@ -34,6 +34,7 @@ from aisentry.static_detectors import (
     OverrelianceDetector,
     PromptInjectionDetector,
     SecretsDetector,
+    SQLInjectionDetector,
     SupplyChainDetector,
     TrainingPoisoningDetector,
 )
@@ -238,6 +239,7 @@ class StaticScanner:
             ('LLM08', ExcessiveAgencyDetector),
             ('LLM09', OverrelianceDetector),
             ('LLM10', ModelTheftDetector),
+            ('SQLI', SQLInjectionDetector),
         ]
 
         # Check if LLM04 or LLM10 is explicitly targeted
