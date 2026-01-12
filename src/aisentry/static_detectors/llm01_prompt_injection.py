@@ -259,10 +259,10 @@ class PromptInjectionDetector(BaseDetector):
         direct_taints = arg_vars & user_params
 
         for tainted_var in direct_taints:
-            # SAFE PATTERN: user param directly in user role message content
-            # This is the expected pattern: {"role": "user", "content": user_input}
-            if tainted_var in safe_user_role_vars:
-                continue  # Skip - this is the correct way to pass user input
+            # User input in user role is still a potential injection vector
+            # (even with proper ChatML format, payloads can influence LLM behavior)
+            # but we note it uses the proper pattern for confidence calculation
+            is_proper_user_role = tainted_var in safe_user_role_vars
 
             flows.append(TaintFlow(
                 source_var=tainted_var,
@@ -274,6 +274,7 @@ class PromptInjectionDetector(BaseDetector):
                     'operation_type': 'direct_param',
                     'llm_function': llm_call['function'],
                     'function_name': func_name,
+                    'uses_proper_user_role': is_proper_user_role,
                 }
             ))
 
@@ -567,6 +568,9 @@ class PromptInjectionDetector(BaseDetector):
             confidence -= 0.25  # Sanitization is moderate mitigation
         elif evidence.get('has_validation', False):
             confidence -= 0.15  # Validation is weak mitigation
+
+        # Note: uses_proper_user_role is tracked in evidence but doesn't reduce confidence
+        # because even properly-formatted user messages can contain injection payloads
 
         # Ensure confidence stays in valid range
         return max(0.0, min(1.0, confidence))

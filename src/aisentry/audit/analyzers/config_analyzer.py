@@ -264,7 +264,9 @@ class ConfigAnalyzer:
         """Recursively extract keys from nested config."""
         if isinstance(data, dict):
             for key, value in data.items():
-                full_key = f"{prefix}.{key}" if prefix else key
+                # Ensure key is always a string (YAML allows bool/int keys)
+                key_str = str(key) if not isinstance(key, str) else key
+                full_key = f"{prefix}.{key_str}" if prefix else key_str
                 self._matches.append(ConfigMatch(
                     file_path=file_path,
                     key=full_key,
