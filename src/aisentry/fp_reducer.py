@@ -39,7 +39,6 @@ import os
 import pickle
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Optional imports
@@ -492,10 +491,16 @@ Respond with ONLY a JSON object (no other text):
 
     def load_model(self, path: str):
         """Load trained model from disk"""
-        with open(path, 'rb') as f:
-            model_data = pickle.load(f)
-        self.classifier = model_data['classifier']
-        self.vectorizer = model_data['vectorizer']
+        try:
+            with open(path, 'rb') as f:
+                model_data = pickle.load(f)
+            self.classifier = model_data['classifier']
+            self.vectorizer = model_data['vectorizer']
+        except ModuleNotFoundError:
+            # sklearn not installed - can't unpickle the model
+            self.use_ml = False
+            self.classifier = None
+            self.vectorizer = None
 
     def get_stats(self, findings: List[Finding], threshold: float = 0.4) -> Dict[str, Any]:
         """Get filtering statistics for a set of findings"""

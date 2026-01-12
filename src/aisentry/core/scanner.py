@@ -38,7 +38,7 @@ from aisentry.static_detectors import (
     TrainingPoisoningDetector,
 )
 from aisentry.utils.scoring import calculate_overall_score
-from aisentry.fp_reducer import FPReducer, Finding as FPFinding
+from aisentry.fp_reducer import FPReducer, Finding as FPFinding, SKLEARN_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
@@ -209,9 +209,9 @@ class StaticScanner:
         self.owasp_scorer = OWASPScorer(verbose=verbose)
 
         # Initialize FP reducer for automatic false positive filtering
-        # Try to load trained ML model if available
+        # Try to load trained ML model if available (requires sklearn)
         model_path = Path(__file__).parent.parent.parent.parent / "training" / "fp_model.pkl"
-        if model_path.exists():
+        if model_path.exists() and SKLEARN_AVAILABLE:
             self.fp_reducer = FPReducer(use_ml=True, use_llm=False, model_path=str(model_path))
             if verbose:
                 logger.info(f"Loaded trained FP model from {model_path}")
