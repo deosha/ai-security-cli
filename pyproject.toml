@@ -76,6 +76,11 @@ azure = [
     "azure-identity>=1.12.0",
 ]
 
+# ML-based false positive reduction
+ml = [
+    "scikit-learn>=1.0.0",
+]
+
 # All cloud providers (expanded - can't self-reference)
 cloud = [
     "boto3>=1.28.0",
@@ -102,6 +107,8 @@ all = [
     "google-cloud-aiplatform>=1.25.0",
     "google-auth>=2.0.0",
     "azure-identity>=1.12.0",
+    # ML features
+    "scikit-learn>=1.0.0",
     # Dev tools
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
