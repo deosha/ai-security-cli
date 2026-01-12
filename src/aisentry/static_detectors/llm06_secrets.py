@@ -626,7 +626,7 @@ class SecretsDetector(BaseDetector):
                     category="LLM06: Sensitive Information Disclosure",
                     severity=Severity.CRITICAL if is_known_secret else Severity.HIGH,
                     confidence=0.9 if is_known_secret else 0.75,
-                    title=f"Hardcoded credential in environment variable assignment",
+                    title="Hardcoded credential in environment variable assignment",
                     description=(
                         f"Environment variable '{env_var_name}' is being set to a hardcoded "
                         f"value on line {line_num}. This defeats the purpose of using environment "
