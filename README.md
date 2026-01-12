@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/deosha/aisentry/actions/workflows/test.yml/badge.svg)](https://github.com/deosha/aisentry/actions/workflows/test.yml)
 [![PyPI version](https://img.shields.io/pypi/v/aisentry.svg)](https://pypi.org/project/aisentry/)
+[![Downloads](https://img.shields.io/pypi/dm/aisentry.svg)](https://pypistats.org/packages/aisentry)
 [![Python versions](https://img.shields.io/pypi/pyversions/aisentry.svg)](https://pypi.org/project/aisentry/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
