@@ -126,16 +126,16 @@ LOW_RISK_PATHS = [
 
 # Category risk weights (higher = more likely to be real vulnerability)
 CATEGORY_RISK = {
-    'LLM01': 0.3,  # Prompt Injection - often intentional in frameworks
+    'LLM01': 0.5,  # Prompt Injection - filter only low-confidence findings
     'LLM02': 0.7,  # Insecure Output Handling - usually real
     'LLM03': 0.5,  # Training Data Poisoning
     'LLM04': 0.2,  # Model Denial of Service - low risk
     'LLM05': 0.6,  # Supply Chain Vulnerabilities
     'LLM06': 0.8,  # Sensitive Information Disclosure - high risk
     'LLM07': 0.5,  # Insecure Plugin Design
-    'LLM08': 0.4,  # Excessive Agency
-    'LLM09': 0.3,  # Overreliance
-    'LLM10': 0.3,  # Model Theft
+    'LLM08': 0.5,  # Excessive Agency - filter only low-confidence
+    'LLM09': 0.4,  # Overreliance
+    'LLM10': 0.4,  # Model Theft
 }
 
 
