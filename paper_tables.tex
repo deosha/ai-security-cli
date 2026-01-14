@@ -1,0 +1,110 @@
+
+% AISentry Evaluation Results - LaTeX Tables
+% Generated for research paper
+
+% Table 1: Detection Method Comparison (Synthetic Benchmark)
+\begin{table}[h]
+\centering
+\caption{Detection Method Performance on Synthetic Benchmark (40 files, 30 vulnerable)}
+\label{tab:detection-comparison}
+\begin{tabular}{lcccccc}
+\toprule
+Method & Precision & Recall & F1 & Critical Recall & TP & FP \\
+\midrule
+Pattern-Only & 0.857 & 1.000 & 0.923 & 1.000 & 30 & 5 \\
+ML-Only & 0.857 & 1.000 & 0.923 & 1.000 & 30 & 5 \\
+Taint-Only & 0.857 & 1.000 & 0.923 & 1.000 & 30 & 5 \\
+Ensemble & 0.857 & 1.000 & 0.923 & 1.000 & 30 & 5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Table 1b: Real-World Evaluation (LangChain)
+\begin{table}[h]
+\centering
+\caption{Detection Results on Real-World LLM Project (LangChain, 1579 Python files)}
+\label{tab:langchain-results}
+\begin{tabular}{lcccccc}
+\toprule
+Method & Findings & Critical & High & Medium & Time (s) & ms/file \\
+\midrule
+Pattern-Only & 149 & 69 & 36 & 16 & 10.46 & 6.6 \\
+ML-Only & 368 & 258 & 36 & 46 & 13.18 & 8.3 \\
+Taint-Only & 149 & 69 & 36 & 16 & 10.64 & 6.7 \\
+Ensemble & 368 & 258 & 36 & 46 & 13.17 & 8.3 \\
+\midrule
+\multicolumn{7}{l}{\textit{ML detection: +147\% findings with only +26\% overhead}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Table 2: ML Model Training Results
+\begin{table}[h]
+\centering
+\caption{ML Classifier Training Results (LightGBM, 5000 synthetic samples)}
+\label{tab:ml-training}
+\begin{tabular}{lcccc}
+\toprule
+Classifier & Precision & Recall & F1 & ROC-AUC \\
+\midrule
+Vulnerability (Binary) & 1.000 & 1.000 & 1.000 & 1.000 \\
+Attack Type (Multi-class) & 1.000 & 1.000 & 1.000 & -- \\
+\midrule
+\multicolumn{5}{l}{\textit{5-fold Cross-Validation: F1 = 1.000 $\pm$ 0.000}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Table 3: Feature Importance (Top 10)
+\begin{table}[h]
+\centering
+\caption{Top Feature Importance for Vulnerability Classification}
+\label{tab:feature-importance}
+\begin{tabular}{lc}
+\toprule
+Feature & Importance \\
+\midrule
+llm\_call\_count & 121.0 \\
+variable\_reuse\_count & 111.0 \\
+has\_input\_call & 109.0 \\
+llm\_output\_to\_sink & 101.0 \\
+cross\_function\_flow & 100.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Table 4: Detection by Attack Vector
+\begin{table}[h]
+\centering
+\caption{Detection Rate by Attack Vector Type}
+\label{tab:attack-vectors}
+\begin{tabular}{lccc}
+\toprule
+Attack Vector & Samples & Detected & Detection Rate \\
+\midrule
+Direct & 10 & 10 & 100.0\% \\
+Indirect & 10 & 10 & 100.0\% \\
+Stored & 10 & 10 & 100.0\% \\
+\midrule
+Safe (FP) & 10 & 5 & 50.0\% (FP Rate) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Table 5: Semantic Taint Influence Decay Parameters
+\begin{table}[h]
+\centering
+\caption{Semantic Taint Influence Decay Parameters}
+\label{tab:taint-params}
+\begin{tabular}{lcc}
+\toprule
+Input Position & Influence Factor ($\alpha$) & Description \\
+\midrule
+Prompt (user message) & 0.85 & Direct influence on output \\
+Context (history) & 0.70 & Moderate influence \\
+System prompt & 0.50 & Indirect influence \\
+Multi-hop ($n$ LLM calls) & $0.9^n$ & Exponential decay \\
+\bottomrule
+\end{tabular}
+\end{table}
+

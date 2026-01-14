@@ -60,6 +60,9 @@ class ScanConfig:
     test_confidence_penalty: float = 0.25  # Confidence reduction for test files
     fp_threshold: float = 0.4  # Minimum TP probability to keep (FP reduction)
     fp_reduction: bool = True  # Enable heuristic-based false positive reduction
+    ml_detection: bool = False  # Enable ML-based prompt injection detection
+    taint_analysis: bool = False  # Enable semantic taint analysis through LLM calls
+    ensemble: bool = True  # Combine findings from multiple detection methods
 
     def __post_init__(self):
         # Apply defaults for any missing thresholds
@@ -265,4 +268,7 @@ def load_config(
         test_confidence_penalty=merged.get('test_confidence_penalty', 0.25),
         fp_threshold=merged.get('fp_threshold', 0.4),
         fp_reduction=merged.get('fp_reduction', True),
+        ml_detection=merged.get('ml_detection', False),
+        taint_analysis=merged.get('taint_analysis', False),
+        ensemble=merged.get('ensemble', True),
     )

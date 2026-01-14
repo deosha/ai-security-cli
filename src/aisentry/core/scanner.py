@@ -38,6 +38,17 @@ from aisentry.static_detectors import (
     SupplyChainDetector,
     TrainingPoisoningDetector,
 )
+
+# Optional advanced detectors (imported conditionally to avoid startup cost)
+def _get_ml_detector():
+    """Lazily import ML detector to avoid startup cost."""
+    from aisentry.static_detectors.ml_prompt_injection import MLPromptInjectionDetector
+    return MLPromptInjectionDetector
+
+def _get_taint_detector():
+    """Lazily import semantic taint detector."""
+    from aisentry.static_detectors.semantic_taint_detector import SemanticTaintDetector
+    return SemanticTaintDetector
 from aisentry.utils.scoring import calculate_overall_score
 from aisentry.fp_reducer import FPReducer, Finding as FPFinding, SKLEARN_AVAILABLE
 
@@ -269,7 +280,87 @@ class StaticScanner:
                     )
                 )
 
+        # Add ML-based detector if enabled
+        if self.config.ml_detection:
+            try:
+                MLDetector = _get_ml_detector()
+                detectors.append(
+                    MLDetector(
+                        verbose=self.verbose,
+                        confidence_threshold=self.config.get_threshold('ML_LLM01')
+                    )
+                )
+                if self.verbose:
+                    logger.info("ML-based prompt injection detector enabled")
+            except ImportError as e:
+                logger.warning(f"Could not load ML detector: {e}")
+
+        # Add semantic taint detector if enabled
+        if self.config.taint_analysis:
+            try:
+                TaintDetector = _get_taint_detector()
+                detectors.append(
+                    TaintDetector(
+                        verbose=self.verbose,
+                        confidence_threshold=self.config.get_threshold('TAINT01')
+                    )
+                )
+                if self.verbose:
+                    logger.info("Semantic taint analysis detector enabled")
+            except ImportError as e:
+                logger.warning(f"Could not load semantic taint detector: {e}")
+
         return detectors
+
+    def _combine_ensemble_findings(self, findings: List[Finding]) -> List[Finding]:
+        """
+        Combine findings from multiple detection methods (ensemble).
+
+        When the same vulnerability is detected by multiple methods
+        (pattern-based, ML, semantic taint), boost confidence and merge.
+        """
+        if not self.config.ensemble:
+            return findings
+
+        # Group findings by location (file:line) and category prefix
+        by_location = defaultdict(list)
+        for f in findings:
+            # Extract category prefix (LLM01, TAINT01, etc.)
+            cat_prefix = f.category.split(':')[0].strip()
+            # Group similar categories together
+            if 'LLM01' in cat_prefix or 'ML_LLM01' in cat_prefix:
+                group_key = (f.file_path, f.line_number, 'prompt_injection')
+            elif 'TAINT' in cat_prefix or 'LLM02' in cat_prefix:
+                group_key = (f.file_path, f.line_number, 'output_handling')
+            else:
+                group_key = (f.file_path, f.line_number, cat_prefix)
+
+            by_location[group_key].append(f)
+
+        combined = []
+        for key, group in by_location.items():
+            if len(group) == 1:
+                combined.append(group[0])
+            else:
+                # Multiple detectors found same issue - boost confidence
+                best = max(group, key=lambda f: f.confidence)
+
+                # Record ensemble confirmation in evidence
+                best.evidence = best.evidence or {}
+                best.evidence['ensemble_confirmed'] = True
+                best.evidence['detection_methods'] = [
+                    f.evidence.get('detection_method', f.category.split(':')[0])
+                    for f in group
+                ]
+                best.evidence['ensemble_count'] = len(group)
+
+                # Boost confidence (capped at 1.0)
+                confidence_boost = 0.10 * (len(group) - 1)
+                best.confidence = min(1.0, best.confidence + confidence_boost)
+
+                combined.append(best)
+
+        return combined
 
     def scan(self, path: str) -> ScanResult:
         """
@@ -345,6 +436,10 @@ class StaticScanner:
         # Apply deduplication
         if self.config.dedup == 'exact':
             all_findings = self._deduplicate_exact(all_findings)
+
+        # Apply ensemble combination if multiple detection methods are enabled
+        if self.config.ensemble and (self.config.ml_detection or self.config.taint_analysis):
+            all_findings = self._combine_ensemble_findings(all_findings)
 
         # Apply heuristic-based false positive reduction (if enabled)
         fp_stats = {}
@@ -628,6 +723,10 @@ class StaticScanner:
         # Apply deduplication
         if self.config.dedup == 'exact':
             all_findings = self._deduplicate_exact(all_findings)
+
+        # Apply ensemble combination if multiple detection methods are enabled
+        if self.config.ensemble and (self.config.ml_detection or self.config.taint_analysis):
+            all_findings = self._combine_ensemble_findings(all_findings)
 
         # Apply test file confidence demotion
         all_findings = self._apply_test_demotion(all_findings)

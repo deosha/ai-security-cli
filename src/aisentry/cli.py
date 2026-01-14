@@ -147,6 +147,21 @@ def main():
     default=None,
     help="Minimum TP probability to keep findings (0.0-1.0, default: 0.4)",
 )
+@click.option(
+    "--ml-detection/--no-ml-detection",
+    default=False,
+    help="Enable ML-based prompt injection detection (experimental)",
+)
+@click.option(
+    "--taint-analysis/--no-taint-analysis",
+    default=False,
+    help="Enable semantic taint analysis through LLM calls (experimental)",
+)
+@click.option(
+    "--ensemble/--no-ensemble",
+    default=True,
+    help="Combine ML + pattern + taint findings when multiple methods enabled (default: enabled)",
+)
 def scan(
     path: str,
     output: str,
@@ -165,6 +180,9 @@ def scan(
     quiet: bool,
     fp_reduction: bool,
     fp_threshold: Optional[float],
+    ml_detection: bool,
+    taint_analysis: bool,
+    ensemble: bool,
 ):
     """
     Perform static code analysis for security vulnerabilities.
@@ -249,6 +267,9 @@ def scan(
     cli_options['fp_reduction'] = fp_reduction
     if fp_threshold is not None:
         cli_options['fp_threshold'] = fp_threshold
+    cli_options['ml_detection'] = ml_detection
+    cli_options['taint_analysis'] = taint_analysis
+    cli_options['ensemble'] = ensemble
 
     # Load config with precedence: CLI > env > yaml > defaults
     config_path = Path(config) if config else None
@@ -879,6 +900,246 @@ def _get_severity_color(severity: str) -> str:
         "info": "dim",
     }
     return colors.get(severity, "white")
+
+
+# =============================================================================
+# ML Training Commands
+# =============================================================================
+
+@main.group()
+def ml():
+    """
+    Machine learning model training and evaluation.
+
+    Commands for training the ML-based prompt injection classifier
+    and evaluating detector performance.
+    """
+    pass
+
+
+@ml.command("train")
+@click.option(
+    "-n", "--num-samples",
+    type=int,
+    default=5000,
+    help="Number of synthetic samples to generate (default: 5000)",
+)
+@click.option(
+    "-o", "--output",
+    type=click.Path(),
+    default="prompt_injection_model.pkl",
+    help="Output path for trained model",
+)
+@click.option(
+    "--export-onnx/--no-export-onnx",
+    default=False,
+    help="Also export model to ONNX format",
+)
+@click.option(
+    "-v", "--verbose",
+    is_flag=True,
+    help="Enable verbose output",
+)
+def ml_train(num_samples: int, output: str, export_onnx: bool, verbose: bool):
+    """
+    Train the ML-based prompt injection classifier.
+
+    Generates synthetic training data and trains a LightGBM classifier
+    to detect prompt injection vulnerabilities.
+
+    Example:
+        aisentry ml train -n 10000 -o model.pkl --export-onnx
+    """
+    setup_logging(verbose)
+
+    try:
+        from aisentry.ml.training.trainer import PromptInjectionTrainer
+    except ImportError as e:
+        console.print(f"[red]Training dependencies not available: {e}[/red]")
+        console.print("[dim]Install with: pip install lightgbm scikit-learn[/dim]")
+        sys.exit(1)
+
+    console.print(Panel.fit(
+        f"[bold]Training ML Classifier[/bold]\n"
+        f"Samples: {num_samples}\n"
+        f"Output: {output}",
+        title="ML Training",
+    ))
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        # Generate synthetic data
+        task = progress.add_task("Generating synthetic data...", total=None)
+        trainer = PromptInjectionTrainer()
+        samples = trainer.generate_synthetic_data(num_samples=num_samples)
+        progress.update(task, description=f"Generated {len(samples)} samples")
+
+        # Load samples
+        task = progress.add_task("Extracting features...", total=None)
+        trainer.load_samples(samples)
+        progress.update(task, description="Features extracted")
+
+        # Train
+        task = progress.add_task("Training classifiers...", total=None)
+        vuln_metrics, attack_metrics = trainer.train(cross_validate=True)
+        progress.update(task, description="Training complete")
+
+        # Save model
+        task = progress.add_task("Saving model...", total=None)
+        trainer.save_model(output)
+        progress.update(task, description=f"Model saved to {output}")
+
+        # Export ONNX if requested
+        if export_onnx:
+            task = progress.add_task("Exporting ONNX...", total=None)
+            onnx_path = output.replace('.pkl', '.onnx')
+            try:
+                trainer.export_onnx(onnx_path)
+                progress.update(task, description=f"ONNX exported to {onnx_path}")
+            except ImportError:
+                progress.update(task, description="ONNX export skipped (dependencies not available)")
+
+    # Print results
+    console.print("\n[bold green]Training Results[/bold green]")
+
+    results_table = Table(title="Vulnerability Classifier")
+    results_table.add_column("Metric", style="cyan")
+    results_table.add_column("Value", justify="right")
+
+    results_table.add_row("Precision", f"{vuln_metrics.precision:.3f}")
+    results_table.add_row("Recall", f"{vuln_metrics.recall:.3f}")
+    results_table.add_row("F1 Score", f"{vuln_metrics.f1_score:.3f}")
+    if vuln_metrics.roc_auc:
+        results_table.add_row("ROC AUC", f"{vuln_metrics.roc_auc:.3f}")
+    if vuln_metrics.cross_val_scores is not None:
+        import numpy as np
+        results_table.add_row("Cross-Val F1", f"{np.mean(vuln_metrics.cross_val_scores):.3f} ± {np.std(vuln_metrics.cross_val_scores):.3f}")
+
+    console.print(results_table)
+
+    # Feature importance
+    console.print("\n[bold]Top Feature Importance[/bold]")
+    for name, importance in trainer.get_feature_importance(top_n=5).items():
+        console.print(f"  {name}: {importance:.3f}")
+
+
+@ml.command("evaluate")
+@click.argument("benchmark_dir", type=click.Path(exists=True))
+@click.option(
+    "-o", "--output",
+    type=click.Path(),
+    help="Save report to file",
+)
+@click.option(
+    "--compare/--no-compare",
+    default=True,
+    help="Compare all detection methods",
+)
+@click.option(
+    "-v", "--verbose",
+    is_flag=True,
+    help="Enable verbose output",
+)
+def ml_evaluate(benchmark_dir: str, output: Optional[str], compare: bool, verbose: bool):
+    """
+    Evaluate detectors against benchmark dataset.
+
+    Runs pattern-based, ML, and semantic taint detectors against
+    labeled benchmark files and calculates precision/recall/F1.
+
+    Example:
+        aisentry ml evaluate benchmarks/ -o report.md
+    """
+    setup_logging(verbose)
+
+    from aisentry.evaluation import BenchmarkRunner, SecurityMetrics
+
+    console.print(Panel.fit(
+        f"[bold]Evaluating Detectors[/bold]\n"
+        f"Benchmark: {benchmark_dir}",
+        title="Evaluation",
+    ))
+
+    runner = BenchmarkRunner(benchmark_dir)
+
+    if not runner.ground_truth:
+        console.print("[yellow]Warning: No ground_truth.json found. Generating template...[/yellow]")
+        template_path = Path(benchmark_dir) / "ground_truth.json"
+        runner.generate_ground_truth_template(str(template_path))
+        console.print(f"[dim]Template saved to {template_path}. Please label the files and re-run.[/dim]")
+        return
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Running evaluation...", total=None)
+        results = runner.run_evaluation()
+        progress.update(task, description="Evaluation complete")
+
+    # Print comparison table
+    if compare:
+        console.print("\n[bold]Method Comparison[/bold]")
+        comparison = SecurityMetrics.compare_methods(results, baseline_name='pattern_only')
+        console.print(comparison)
+
+    # Print detailed results
+    for name, metrics in results.items():
+        console.print(f"\n[bold cyan]{name}[/bold cyan]")
+        console.print(f"  Precision: {metrics.precision:.3f}")
+        console.print(f"  Recall: {metrics.recall:.3f}")
+        console.print(f"  F1: {metrics.f1_score:.3f}")
+        console.print(f"  Critical Recall: {metrics.critical_recall:.3f}")
+        console.print(f"  TP: {metrics.true_positives}, FP: {metrics.false_positives}")
+
+    # Save report if requested
+    if output:
+        report = runner.create_comparison_report(results, output)
+        console.print(f"\n[green]Report saved to {output}[/green]")
+
+
+@ml.command("generate-benchmarks")
+@click.argument("output_dir", type=click.Path())
+@click.option(
+    "-n", "--num-samples",
+    type=int,
+    default=10,
+    help="Samples per category (default: 10)",
+)
+@click.option(
+    "-v", "--verbose",
+    is_flag=True,
+    help="Enable verbose output",
+)
+def ml_generate_benchmarks(output_dir: str, num_samples: int, verbose: bool):
+    """
+    Generate sample benchmark dataset for testing.
+
+    Creates synthetic vulnerable and safe code samples with
+    ground truth labels for evaluation.
+
+    Example:
+        aisentry ml generate-benchmarks benchmarks/ -n 20
+    """
+    setup_logging(verbose)
+
+    from aisentry.evaluation.benchmark_runner import create_sample_benchmarks
+
+    console.print(Panel.fit(
+        f"[bold]Generating Benchmarks[/bold]\n"
+        f"Output: {output_dir}\n"
+        f"Samples per category: {num_samples}",
+        title="Benchmark Generation",
+    ))
+
+    create_sample_benchmarks(output_dir)
+
+    console.print(f"\n[green]Benchmarks created in {output_dir}[/green]")
+    console.print("[dim]Run evaluation with: aisentry ml evaluate {output_dir}[/dim]")
 
 
 if __name__ == "__main__":
