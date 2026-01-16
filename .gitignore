@@ -99,3 +99,7 @@ logs/
 # Training data (private)
 training/fp_reducer_training_data.json
 training/expand_training_data.py
+
+# Development artifacts
+models/
+benchmarks/
