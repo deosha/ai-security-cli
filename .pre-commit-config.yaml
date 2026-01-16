@@ -1,0 +1,56 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-requests, types-PyYAML]
+        args: [--ignore-missing-imports, --no-strict-optional]
+        exclude: ^tests/
+
+  - repo: local
+    hooks:
+      - id: aisentry-tests
+        name: aisentry unit tests
+        entry: python -m pytest tests/ -q --tb=no -x
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
+      - id: aisentry-metrics
+        name: aisentry metrics regression check
+        entry: python -c "
+import subprocess, json, sys
+# Run evaluation
+subprocess.run(['make', 'eval-testbed-static'], cwd='../llm-sec-eval', capture_output=True)
+subprocess.run(['python3', 'scripts/aggregate_static.py'], cwd='../llm-sec-eval', capture_output=True)
+# Check metrics
+with open('../llm-sec-eval/results/aggregated/static_metrics.json') as f:
+    data = json.load(f)
+aisec = [t for t in data['tools'] if t['tool'] == 'aisec'][0]
+p, r, f1 = aisec['precision'], aisec['recall'], aisec['f1']
+MIN_P, MIN_R, MIN_F1 = 0.60, 0.68, 0.64
+if p < MIN_P or r < MIN_R or f1 < MIN_F1:
+    print(f'REGRESSION: P={p:.3f} R={r:.3f} F1={f1:.3f} (min: P={MIN_P} R={MIN_R} F1={MIN_F1})')
+    sys.exit(1)
+print(f'OK: P={p:.3f} R={r:.3f} F1={f1:.3f}')
+"
+        language: system
+        pass_filenames: false
+        stages: [commit]
