@@ -51,13 +51,22 @@ class ExcessiveAgencyDetector(BaseDetector):
     default_confidence_threshold = 0.6
 
     # High-risk operations that should require confirmation
+    # Use specific patterns to avoid matching framework infrastructure code
     HIGH_RISK_OPERATIONS = {
-        'delete': ['delete', 'remove', 'drop', 'truncate', 'destroy'],
-        'write': ['write', 'update', 'modify', 'create', 'insert'],
-        'execute': ['exec', 'eval', 'compile', 'run', 'execute', 'system', 'subprocess'],
-        'network': ['request', 'fetch', 'post', 'put', 'send', 'upload'],
-        'financial': ['payment', 'purchase', 'transfer', 'charge', 'refund'],
-        'admin': ['grant', 'revoke', 'chmod', 'sudo', 'admin']
+        'delete': ['delete_file', 'delete_record', 'drop_table', 'truncate_table', 'destroy_resource', 'rm -', 'unlink('],
+        'write': ['write_file', 'save_to_disk', 'overwrite_', 'modify_config'],
+        'execute': ['exec(', 'eval(', 'subprocess.run', 'subprocess.call', 'subprocess.Popen', 'os.system(', 'os.popen('],
+        'network': ['urlopen(', 'requests.get(', 'requests.post(', 'httpx.get(', 'httpx.post('],
+        'financial': ['process_payment', 'charge_card', 'transfer_funds', 'make_purchase'],
+        'admin': ['grant_permission', 'revoke_access', 'chmod(', 'sudo ', 'set_admin']
+    }
+
+    # Framework infrastructure patterns to exclude (these are not LLM agency issues)
+    EXCLUDED_PATTERNS = {
+        '_configure', '_get_', '_set_', '_transform', '_stream',
+        'with_listeners', 'with_config', 'parse_result', 'serialize',
+        '__init__', '__call__', '__enter__', '__exit__',
+        'callback', 'handler', 'middleware', 'decorator'
     }
 
     # Tool/function calling patterns (OpenAI function calling, LangChain tools, etc.)
@@ -530,43 +539,88 @@ class ExcessiveAgencyDetector(BaseDetector):
         return False
 
     def _check_high_risk_operations(self, parsed_data: Dict[str, Any]) -> List[Finding]:
-        """Check for high-risk operations without confirmation"""
+        """Check for high-risk operations without confirmation.
+
+        Only flags when:
+        1. Function contains specific high-risk operation patterns (not generic keywords)
+        2. Function has LLM call AND LLM output appears to flow to the operation
+        3. Function is not a framework infrastructure pattern (excluded)
+        """
         findings = []
         functions = parsed_data.get('functions', [])
         source_lines = parsed_data.get('source_lines', [])
         llm_calls = parsed_data.get('llm_api_calls', [])
 
         for func in functions:
-            func_name = func.get('name', '').lower()
+            func_name = func.get('name', '')
+            func_name_lower = func_name.lower()
             func_start = func.get('line', 0)
             func_end = func.get('end_line', func_start + 10)
 
+            # Skip excluded framework infrastructure patterns
+            if any(excl in func_name_lower for excl in self.EXCLUDED_PATTERNS):
+                continue
+
             # Get function body
             func_body = '\n'.join(source_lines[func_start-1:func_end])
-            func_lower = func_body.lower()
 
-            # Check if function performs high-risk operations
+            # Check if function performs high-risk operations (exact pattern match)
             risk_types = []
+            matched_patterns = []
             for risk_category, patterns in self.HIGH_RISK_OPERATIONS.items():
-                if any(pattern in func_name or pattern in func_lower for pattern in patterns):
-                    risk_types.append(risk_category)
+                for pattern in patterns:
+                    if pattern in func_body:
+                        risk_types.append(risk_category)
+                        matched_patterns.append(pattern)
+                        break
 
             if not risk_types:
                 continue
 
-            # Check if function is called by or uses LLM
-            has_llm_call = any(
-                func_start <= call.get('line', 0) <= func_end
-                for call in llm_calls
-            )
+            # Check if function has LLM call
+            func_llm_calls = [
+                call for call in llm_calls
+                if func_start <= call.get('line', 0) <= func_end
+            ]
 
-            if not has_llm_call:
+            if not func_llm_calls:
+                continue
+
+            # Additional check: LLM output variable should be used near the high-risk operation
+            # Look for response/result/output variable assignments from LLM calls
+            llm_output_vars = set()
+            for call in func_llm_calls:
+                call_line = call.get('line', 0)
+                if 0 < call_line <= len(source_lines):
+                    line_content = source_lines[call_line - 1]
+                    # Look for assignment: var = llm_call(...)
+                    if '=' in line_content:
+                        var_part = line_content.split('=')[0].strip()
+                        if var_part and not var_part.startswith('#'):
+                            llm_output_vars.add(var_part.split()[-1])
+
+            # Check if any LLM output variable is used in the high-risk operation context
+            has_llm_flow = False
+            if llm_output_vars:
+                for pattern in matched_patterns:
+                    pattern_idx = func_body.find(pattern)
+                    if pattern_idx >= 0:
+                        # Get context around the pattern (50 chars before and after)
+                        context_start = max(0, pattern_idx - 50)
+                        context_end = min(len(func_body), pattern_idx + len(pattern) + 50)
+                        context = func_body[context_start:context_end]
+                        if any(var in context for var in llm_output_vars):
+                            has_llm_flow = True
+                            break
+
+            if not has_llm_flow:
                 continue
 
             # Check for confirmation mechanisms
+            func_lower = func_body.lower()
             has_confirmation = any(
                 keyword in func_lower
-                for keyword in ['confirm', 'approval', 'verify', 'prompt', 'ask_user']
+                for keyword in ['confirm', 'approval', 'verify', 'prompt', 'ask_user', 'human_review']
             )
 
             if not has_confirmation:
@@ -577,9 +631,9 @@ class ExcessiveAgencyDetector(BaseDetector):
                     category=f"{self.detector_id}: {self.name}",
                     severity=severity,
                     confidence=0.0,  # Will be set by BaseDetector
-                    title=f"High-risk {'/'.join(risk_types)} operation without confirmation in '{func.get('name')}'",
+                    title=f"High-risk {'/'.join(risk_types)} operation without confirmation in '{func_name}'",
                     description=(
-                        f"Function '{func.get('name')}' on line {func_start} performs high-risk "
+                        f"Function '{func_name}' on line {func_start} performs high-risk "
                         f"{'/'.join(risk_types)} operations based on LLM decisions without requiring "
                         f"user confirmation or approval. This allows the LLM to autonomously execute "
                         f"potentially destructive or sensitive actions."
@@ -589,8 +643,9 @@ class ExcessiveAgencyDetector(BaseDetector):
                     code_snippet=self._get_code_snippet(source_lines, func_start, context=3),
                     recommendation=self._get_confirmation_recommendation(),
                     evidence={
-                        'function_name': func.get('name'),
+                        'function_name': func_name,
                         'risk_types': risk_types,
+                        'matched_patterns': matched_patterns,
                         'has_confirmation': False
                     }
                 )
@@ -599,43 +654,91 @@ class ExcessiveAgencyDetector(BaseDetector):
         return findings
 
     def _check_unrestricted_api_access(self, parsed_data: Dict[str, Any]) -> List[Finding]:
-        """Check for unrestricted API access from LLM outputs"""
+        """Check for unrestricted API access from LLM outputs.
+
+        Only flags when:
+        1. LLM output variable is used as URL parameter in HTTP request
+        2. No URL validation/allowlist is present
+        3. Function is not excluded infrastructure pattern
+        """
         findings = []
         functions = parsed_data.get('functions', [])
         source_lines = parsed_data.get('source_lines', [])
         llm_calls = parsed_data.get('llm_api_calls', [])
 
-        # Look for API call patterns after LLM calls
+        # Specific HTTP call patterns (not generic 'http.')
+        HTTP_PATTERNS = ['requests.get(', 'requests.post(', 'requests.put(', 'requests.delete(',
+                        'httpx.get(', 'httpx.post(', 'urllib.request.urlopen(',
+                        'aiohttp.request(', 'fetch(']
+
         for func in functions:
             func_name = func.get('name', '')
+            func_name_lower = func_name.lower()
             func_start = func.get('line', 0)
             func_end = func.get('end_line', func_start + 10)
 
-            func_body = '\n'.join(source_lines[func_start-1:func_end])
-            func_lower = func_body.lower()
-
-            # Check if function makes API calls
-            makes_api_calls = any(
-                pattern in func_lower
-                for pattern in ['requests.', 'httpx.', 'urllib.', 'fetch(', 'http.']
-            )
-
-            if not makes_api_calls:
+            # Skip excluded framework infrastructure patterns
+            if any(excl in func_name_lower for excl in self.EXCLUDED_PATTERNS):
                 continue
 
-            # Check if function uses LLM
-            has_llm_call = any(
-                func_start <= call.get('line', 0) <= func_end
-                for call in llm_calls
-            )
+            func_body = '\n'.join(source_lines[func_start-1:func_end])
 
-            if not has_llm_call:
+            # Check if function makes specific API calls
+            http_call_found = None
+            for pattern in HTTP_PATTERNS:
+                if pattern in func_body:
+                    http_call_found = pattern
+                    break
+
+            if not http_call_found:
+                continue
+
+            # Check if function has LLM call
+            func_llm_calls = [
+                call for call in llm_calls
+                if func_start <= call.get('line', 0) <= func_end
+            ]
+
+            if not func_llm_calls:
+                continue
+
+            # Extract LLM output variable names
+            llm_output_vars = set()
+            for call in func_llm_calls:
+                call_line = call.get('line', 0)
+                if 0 < call_line <= len(source_lines):
+                    line_content = source_lines[call_line - 1]
+                    if '=' in line_content:
+                        var_part = line_content.split('=')[0].strip()
+                        if var_part and not var_part.startswith('#'):
+                            llm_output_vars.add(var_part.split()[-1])
+
+            if not llm_output_vars:
+                continue
+
+            # Check if LLM output var is used in HTTP call (as URL parameter)
+            http_call_idx = func_body.find(http_call_found)
+            if http_call_idx < 0:
+                continue
+
+            # Get the HTTP call line and following content (to capture URL argument)
+            http_context_end = func_body.find(')', http_call_idx)
+            if http_context_end < 0:
+                http_context_end = min(len(func_body), http_call_idx + 200)
+            http_context = func_body[http_call_idx:http_context_end]
+
+            # Check if any LLM output variable appears in the HTTP call arguments
+            llm_var_in_url = any(var in http_context for var in llm_output_vars)
+
+            if not llm_var_in_url:
                 continue
 
             # Check for URL validation/allowlist
+            func_lower = func_body.lower()
             has_url_validation = any(
                 keyword in func_lower
-                for keyword in ['allowlist', 'whitelist', 'validate_url', 'allowed_domains']
+                for keyword in ['allowlist', 'whitelist', 'validate_url', 'allowed_domains',
+                               'allowed_hosts', 'url_validator', 'is_valid_url']
             )
 
             if not has_url_validation:
@@ -644,12 +747,12 @@ class ExcessiveAgencyDetector(BaseDetector):
                     category=f"{self.detector_id}: {self.name}",
                     severity=Severity.HIGH,
                     confidence=0.0,  # Will be set by BaseDetector
-                    title=f"Unrestricted API access from LLM in '{func_name}'",
+                    title=f"LLM output used as URL in HTTP request in '{func_name}'",
                     description=(
-                        f"Function '{func_name}' on line {func_start} makes HTTP/API requests "
-                        f"based on LLM outputs without URL validation or allowlisting. This allows "
-                        f"the LLM to make requests to arbitrary endpoints, potentially exfiltrating "
-                        f"data, performing SSRF attacks, or accessing unauthorized resources."
+                        f"Function '{func_name}' on line {func_start} uses LLM output as a URL "
+                        f"in an HTTP request ({http_call_found.rstrip('(')}) without URL validation "
+                        f"or allowlisting. This allows the LLM to make requests to arbitrary "
+                        f"endpoints, potentially performing SSRF attacks or data exfiltration."
                     ),
                     file_path=parsed_data.get('file_path', ''),
                     line_number=func_start,
@@ -657,6 +760,8 @@ class ExcessiveAgencyDetector(BaseDetector):
                     recommendation=self._get_api_access_recommendation(),
                     evidence={
                         'function_name': func_name,
+                        'http_pattern': http_call_found,
+                        'llm_vars_found': list(llm_output_vars),
                         'has_url_validation': False
                     }
                 )

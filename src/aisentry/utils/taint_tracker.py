@@ -118,6 +118,26 @@ class SemanticTaintEdge:
     confidence_modifier: float = 1.0  # Multiplier applied to influence strength
 
 
+@dataclass
+class FunctionSummary:
+    """
+    Summary of a function's taint behavior for inter-procedural analysis.
+
+    Used to track which functions:
+    - Contain LLM calls (LLM wrapper functions)
+    - Return LLM-tainted data
+    - Propagate taint from parameters to return value
+    """
+    name: str                           # Function name
+    start_line: int                     # Function definition line
+    end_line: int                       # Function end line (approximate)
+    contains_llm_call: bool = False     # Has direct LLM API call
+    returns_llm_output: bool = False    # Returns data from LLM call
+    tainted_params: Set[str] = field(default_factory=set)  # Params that flow to return
+    llm_hops_added: int = 0             # LLM hops added by this function
+    influence_decay: float = 1.0        # Influence decay through this function
+
+
 class SemanticTaintGraph:
     """
     Graph-based semantic taint tracking that preserves influence through LLM calls.
@@ -1134,24 +1154,56 @@ def identify_sink_type(func_name: str) -> Optional[SinkType]:
 # INTERPROCEDURAL ANALYSIS
 # =============================================================================
 
-# LLM API patterns to identify LLM calls
+# LLM API patterns to identify LLM calls - SPECIFIC patterns only
 LLM_API_PATTERNS = {
-    # OpenAI
-    'openai', 'chatcompletion', 'chat.completions.create', 'completions.create',
-    # Anthropic
-    'anthropic', 'messages.create', 'claude',
-    # LangChain
-    'langchain', 'llm.invoke', 'chain.invoke', 'chain.run',
-    # Ollama
-    'ollama', 'chat', 'generate',
-    # Generic
-    'llm.', 'model.generate', 'model.complete',
+    # OpenAI - specific
+    'openai.chat.completions.create', 'openai.completions.create',
+    'client.chat.completions.create', 'client.completions.create',
+    'chatcompletion.create',
+    # Anthropic - specific
+    'anthropic.messages.create', 'client.messages.create',
+    # LangChain - specific
+    'langchain', 'llama_index',
+    # Ollama - specific
+    'ollama.chat', 'ollama.generate',
+    # LiteLLM
+    'litellm.completion', 'litellm.acompletion',
 }
 
-# Patterns indicating LLM output extraction
+# Patterns indicating LLM output extraction - SPECIFIC OpenAI/Anthropic patterns only
 LLM_OUTPUT_PATTERNS = {
-    '.choices[', '.message.content', '.content', '.text',
-    '.completion', '.output', '.response',
+    # OpenAI response structure
+    '.choices[0].message.content',
+    '.choices[0].message',
+    '.choices[0].text',
+    '.choices[',
+    # Anthropic response structure
+    '.content[0].text',
+    # LangChain
+    '.generations[',
+    '.invoke(',
+}
+
+# Patterns that should NOT be considered LLM-related (exclusions)
+NON_LLM_PATTERNS = {
+    # Django/SQLAlchemy ORM
+    'models.', 'Model.', '.objects.', '.query(', '.filter(', '.save(', '.delete(',
+    'session.query', 'Session(',
+    # HTTP libraries (generic responses, not LLM)
+    'requests.get', 'requests.post', 'requests.Response',
+    'httpx.get', 'httpx.post', 'httpx.Response',
+    'aiohttp.ClientSession', 'urllib.',
+    # Standard library
+    'subprocess.', 'os.path', 'sys.', 'pathlib.',
+    'json.loads', 'json.dumps', 'pickle.', 're.match', 'datetime.',
+    # ML (non-LLM) - sklearn, torch, tensorflow
+    'sklearn.', 'torch.nn', 'tensorflow.', 'keras.',
+    'numpy.', 'pandas.', 'scipy.',
+    # Database
+    'sqlite3.', 'psycopg2.', 'mysql.', 'pymongo.',
+    # Common false positive patterns
+    '.to_dict(', '.to_json(', '.serialize(', '.validate(',
+    'logging.', 'logger.',
 }
 
 
@@ -1210,28 +1262,24 @@ class InterproceduralAnalyzer:
 
         Tracks:
         1. Direct return of LLM call result
-        2. Return of variable assigned from LLM call
-        3. Return of derived variable (e.g., response.choices[0].message.content)
+        2. Return of variable assigned from CONFIRMED LLM call
+
+        NOTE: We removed the loose pattern matching (checking for .content, .output, etc.)
+        as it caused many false positives. Now we only return True if a variable is
+        confirmed to come from an LLM API call.
         """
-        # Find all LLM-related assignments in function
+        # Find all LLM-related assignments in function (with strict validation)
         llm_vars = self._find_llm_output_vars(func_node)
 
         if not llm_vars:
             return False
 
-        # Check if any return statement uses these variables
+        # Check if any return statement uses these confirmed LLM variables
         for node in ast.walk(func_node):
             if isinstance(node, ast.Return) and node.value is not None:
                 returned_vars = names_in_expr(node.value)
                 if returned_vars & llm_vars:
                     return True
-
-                # Also check if return contains LLM output pattern directly
-                return_str = self._node_to_source(node.value)
-                if any(pattern in return_str.lower() for pattern in LLM_OUTPUT_PATTERNS):
-                    # Check if a tainted var is in the expression
-                    if returned_vars & llm_vars:
-                        return True
 
         return False
 
@@ -1240,6 +1288,9 @@ class InterproceduralAnalyzer:
         Find variables that hold LLM output in a function.
 
         Returns set of variable names that are tainted with LLM output.
+
+        Uses exclusion patterns to avoid false positives from Django models,
+        HTTP responses, etc.
         """
         llm_vars: Set[str] = set()
 
@@ -1247,10 +1298,19 @@ class InterproceduralAnalyzer:
         for node in ast.walk(func_node):
             if isinstance(node, ast.Assign):
                 value_str = self._node_to_source(node.value)
+                value_lower = value_str.lower()
+
+                # Check exclusions first - skip if it matches a non-LLM pattern
+                is_excluded = any(
+                    excl.lower() in value_lower
+                    for excl in NON_LLM_PATTERNS
+                )
+                if is_excluded:
+                    continue
 
                 # Check if assignment is from LLM API call
                 is_llm_call = any(
-                    pattern in value_str.lower()
+                    pattern in value_lower
                     for pattern in LLM_API_PATTERNS
                 )
 
@@ -1370,13 +1430,24 @@ USER_INPUT_PATTERNS = {
 }
 
 # Parameter names that typically indicate user input
+# These are used for SUBSTRING matching, not exact matching
 USER_INPUT_PARAM_NAMES = {
-    'user_input', 'query', 'message', 'prompt', 'text', 'content',
-    'input', 'data', 'body', 'request', 'user_message', 'question',
-    'user_query', 'user_text', 'user_prompt', 'payload',
+    # Core user input patterns
+    'user_input', 'user_request', 'user_message', 'user_query', 'user_text',
+    'user_prompt', 'user_data', 'user_content',
+    # Generic input patterns
+    'query', 'message', 'prompt', 'text', 'content', 'input', 'data', 'body',
+    'request', 'question', 'payload', 'instruction',
+    # Agent/action patterns
+    'task', 'action', 'command', 'cmd', 'operation',
+    # API/web patterns
+    'url', 'path', 'file_path', 'filename', 'document', 'doc',
 }
 
-# Extended LLM API patterns for detection
+# Word-based patterns for substring matching
+USER_INPUT_WORD_PATTERNS = {'user', 'input', 'query', 'request', 'message', 'prompt', 'task', 'command'}
+
+# Extended LLM API patterns for detection - SPECIFIC patterns only (no generic ones)
 EXTENDED_LLM_PATTERNS = {
     # OpenAI
     'openai.chat.completions.create', 'openai.completions.create',
@@ -1385,16 +1456,15 @@ EXTENDED_LLM_PATTERNS = {
     # Anthropic
     'anthropic.messages.create', 'client.messages.create',
     'anthropic.completions.create',
-    # LangChain
-    'llm.invoke', 'llm.predict', 'llm.generate', 'llm.call',
-    'chain.invoke', 'chain.run', 'chain.call',
-    'ChatOpenAI', 'ChatAnthropic', 'ChatVertexAI',
-    # Ollama
-    'ollama.chat', 'ollama.generate',
-    # vLLM
-    'vllm.generate', 'vllm.chat',
-    # Generic patterns
-    '.generate(', '.complete(', '.chat(',
+    # LangChain - specific class instantiations
+    'ChatOpenAI(', 'ChatAnthropic(', 'ChatVertexAI(', 'ChatOllama(',
+    # Ollama - specific
+    'ollama.chat(', 'ollama.generate(',
+    # vLLM - specific
+    'vllm.LLM(', 'vllm.generate(',
+    # LiteLLM
+    'litellm.completion(', 'litellm.acompletion(',
+    # NOTE: Removed generic patterns (.generate(, .complete(, .chat() as they over-match
 }
 
 # LLM argument positions mapping
@@ -1518,16 +1588,28 @@ class SemanticTaintPropagator:
         self._llm_calls: List[LLMCallInfo] = []
         self._dangerous_sinks: List[DangerousSinkInfo] = []
 
-    def build_taint_graph(self) -> SemanticTaintGraph:
+        # Inter-procedural analysis caches
+        self._function_summaries: Dict[str, 'FunctionSummary'] = {}
+        self._llm_wrapper_functions: Set[str] = set()
+
+    def build_taint_graph(self, inter_procedural: str = 'summary') -> SemanticTaintGraph:
         """
         Build complete semantic taint graph for the file.
+
+        Args:
+            inter_procedural: Analysis mode
+                - 'none': Intra-procedural only (fastest, may miss wrapper patterns)
+                - 'summary': Function-level summaries (default, good balance)
+                - 'full': Full inter-procedural (most precise, slower)
 
         Steps:
         1. Identify user input sources
         2. Track variable assignments
         3. Identify and process LLM calls
-        4. Propagate taint through assignments and LLM calls
-        5. Identify dangerous sinks
+        4. (If inter-procedural) Build function summaries
+        5. Propagate taint through assignments and LLM calls
+        6. (If inter-procedural) Propagate through function calls
+        7. Identify dangerous sinks
 
         Returns:
             Populated SemanticTaintGraph
@@ -1541,16 +1623,46 @@ class SemanticTaintPropagator:
         # Step 3: Identify LLM calls
         self._identify_llm_calls()
 
-        # Step 4: Propagate taint through assignments
+        # Step 4: Build function summaries (if inter-procedural enabled)
+        if inter_procedural in ('summary', 'full'):
+            self._build_function_summaries()
+
+        # Step 5-6: Multi-pass propagation
+        # Pass 1: Propagate assignments to get intermediate vars (e.g., prompt) tainted
         self._propagate_assignments()
 
-        # Step 5: Process LLM calls with semantic propagation
+        # Pass 2: Process LLM calls - now inputs are tainted, outputs get LLM influence
         self._process_llm_calls()
 
-        # Step 6: Identify dangerous sinks
+        # Pass 3: Propagate assignments again to inherit LLM influence
+        # (e.g., code = response.choices[0].message.content inherits llm_hops from response)
+        self._propagate_assignments()
+
+        # Step 7: Propagate through function calls (if inter-procedural enabled)
+        if inter_procedural == 'summary':
+            self._propagate_through_wrapper_calls()
+        elif inter_procedural == 'full':
+            self._propagate_full_inter_procedural()
+
+        # Step 8: Identify dangerous sinks
         self._identify_dangerous_sinks()
 
         return self.graph
+
+    def _is_user_input_param(self, arg_name: str) -> bool:
+        """Check if parameter name indicates user input using flexible matching."""
+        arg_lower = arg_name.lower()
+
+        # Exact match
+        if arg_lower in USER_INPUT_PARAM_NAMES:
+            return True
+
+        # Word-based matching: check if any word pattern appears in the arg name
+        for word in USER_INPUT_WORD_PATTERNS:
+            if word in arg_lower:
+                return True
+
+        return False
 
     def _identify_sources(self) -> None:
         """Identify and add taint sources to the graph."""
@@ -1558,7 +1670,7 @@ class SemanticTaintPropagator:
         for func in self.parsed_data.get('functions', []):
             for arg in func.get('args', []):
                 arg_name = arg if isinstance(arg, str) else arg.get('name', '')
-                if arg_name.lower() in USER_INPUT_PARAM_NAMES:
+                if self._is_user_input_param(arg_name):
                     self.graph.add_source(
                         var_name=arg_name,
                         line=func.get('line', 1),
@@ -1577,7 +1689,7 @@ class SemanticTaintPropagator:
             )
 
             if is_user_input:
-                var_name = assignment.get('target', '')
+                var_name = assignment.get('name') or assignment.get('target', '')
                 if var_name:
                     self.graph.add_source(
                         var_name=var_name,
@@ -1609,7 +1721,7 @@ class SemanticTaintPropagator:
     def _build_assignment_map(self) -> None:
         """Build map of variable assignments for propagation tracking."""
         for assignment in self.parsed_data.get('assignments', []):
-            target = assignment.get('target')
+            target = assignment.get('name') or assignment.get('target')
             if target:
                 self._var_assignments[target].append((
                     assignment.get('line', 0),
@@ -1634,8 +1746,19 @@ class SemanticTaintPropagator:
                     self._llm_calls.append(llm_info)
 
     def _is_llm_call(self, func_name: str) -> bool:
-        """Check if a function name matches LLM API patterns."""
+        """Check if a function name matches LLM API patterns.
+
+        Uses exclusion patterns to filter out known false positives like
+        Django models, HTTP responses, etc.
+        """
         func_lower = func_name.lower()
+
+        # Check exclusions first - if it matches a non-LLM pattern, reject it
+        for excl in NON_LLM_PATTERNS:
+            if excl.lower() in func_lower:
+                return False
+
+        # Then check for specific LLM patterns
         return any(
             pattern.lower() in func_lower
             for pattern in EXTENDED_LLM_PATTERNS
@@ -1739,7 +1862,10 @@ class SemanticTaintPropagator:
         return 'generic'
 
     def _propagate_assignments(self) -> None:
-        """Propagate taint through simple assignments."""
+        """Propagate taint through simple assignments (excluding LLM calls)."""
+        # Build set of LLM call lines to skip (these are handled by _process_llm_calls)
+        llm_call_lines = {(llm.line, llm.output_var) for llm in self._llm_calls if llm.output_var}
+
         # Process assignments in order by line number
         all_assignments = []
         for var, assignments in self._var_assignments.items():
@@ -1749,6 +1875,10 @@ class SemanticTaintPropagator:
         all_assignments.sort(key=lambda x: x[0])
 
         for line, target_var, source_vars in all_assignments:
+            # Skip LLM call assignments - these are handled by _process_llm_calls
+            if (line, target_var) in llm_call_lines:
+                continue
+
             if not source_vars:
                 continue
 
@@ -1800,10 +1930,13 @@ class SemanticTaintPropagator:
                 if self._matches_sink_pattern(func_name, info['functions']):
                     # Extract argument variables
                     arg_vars = []
-                    for arg in call.get('args', []):
+                    for arg in call.get('arguments', []):
                         arg_vars.extend(self._extract_vars_from_value(arg))
-                    for kw in call.get('keywords', []):
-                        arg_vars.extend(self._extract_vars_from_value(kw.get('value', '')))
+                    # Keywords is a dict {name: value}, not a list
+                    keywords = call.get('keywords', {})
+                    if isinstance(keywords, dict):
+                        for value in keywords.values():
+                            arg_vars.extend(self._extract_vars_from_value(value))
 
                     self._dangerous_sinks.append(DangerousSinkInfo(
                         line=call.get('line', 0),
@@ -1852,3 +1985,219 @@ class SemanticTaintPropagator:
                 flows.append(flow)
 
         return flows
+
+    # =========================================================================
+    # Inter-procedural Analysis Methods
+    # =========================================================================
+
+    def _build_function_summaries(self) -> None:
+        """
+        Build function summaries for inter-procedural analysis.
+
+        Identifies functions that:
+        1. Contain LLM API calls
+        2. Return data derived from LLM calls
+        3. Are "LLM wrapper functions" (common pattern)
+        """
+        functions = self.parsed_data.get('functions', [])
+        llm_calls = self.parsed_data.get('llm_api_calls', [])
+
+        # Map LLM calls to their containing functions
+        llm_call_lines = {call.get('line', 0) for call in llm_calls}
+
+        for func in functions:
+            func_name = func.get('name', '')
+            start_line = func.get('line', 0)
+            end_line = func.get('end_line', start_line + 100)  # Approximate if not provided
+            body = func.get('body', '')
+
+            # Check if function contains LLM call
+            contains_llm = any(
+                start_line <= line <= end_line
+                for line in llm_call_lines
+            )
+
+            # Check if function returns LLM output
+            # Look for return statements with LLM-related variables
+            returns_llm = False
+            if contains_llm:
+                # Simple heuristic: if function has LLM call and return, likely returns LLM data
+                returns_llm = 'return' in str(body).lower()
+
+            # Check for common LLM wrapper patterns in function name
+            is_wrapper_name = any(
+                pattern in func_name.lower()
+                for pattern in ['llm', 'chat', 'complete', 'generate', 'ask', 'query', 'get_response']
+            )
+
+            if contains_llm or is_wrapper_name:
+                summary = FunctionSummary(
+                    name=func_name,
+                    start_line=start_line,
+                    end_line=end_line,
+                    contains_llm_call=contains_llm,
+                    returns_llm_output=returns_llm or is_wrapper_name,
+                    llm_hops_added=1 if contains_llm else 0,
+                    influence_decay=InfluenceStrength.STRONG.value if contains_llm else 1.0
+                )
+                self._function_summaries[func_name] = summary
+
+                if summary.returns_llm_output:
+                    self._llm_wrapper_functions.add(func_name)
+
+    def _propagate_through_wrapper_calls(self) -> None:
+        """
+        Propagate taint through calls to LLM wrapper functions.
+
+        This is function-level inter-procedural analysis using summaries.
+        When a call to a known LLM wrapper function is found, we treat
+        its return value as LLM-tainted.
+        """
+        if not self._llm_wrapper_functions:
+            return
+
+        # Find calls to wrapper functions in structured_calls
+        for call in self.parsed_data.get('structured_calls', []):
+            func_name = call.get('function', '')
+
+            # Check if this calls a wrapper function
+            if func_name in self._llm_wrapper_functions:
+                summary = self._function_summaries.get(func_name)
+                if not summary:
+                    continue
+
+                # Get assignment target (the variable receiving the return value)
+                # This might be in llm_api_calls if detected, or we need to find it
+                assignment_target = call.get('assignment_target')
+                if not assignment_target:
+                    continue
+
+                line = call.get('line', 0)
+
+                # Find tainted inputs to this function call
+                input_node_ids = []
+                input_positions = {}
+
+                for arg in call.get('arguments', []):
+                    arg_vars = self._extract_vars_from_value(arg)
+                    for var in arg_vars:
+                        node_id = self.graph.find_node_by_var(var, line)
+                        if node_id:
+                            input_node_ids.append(node_id)
+                            input_positions[node_id] = 'prompt'  # Assume args are prompts
+
+                # Propagate taint through the wrapper function
+                if input_node_ids:
+                    self.graph.propagate_through_llm(
+                        input_node_ids=input_node_ids,
+                        output_var=assignment_target,
+                        output_line=line,
+                        input_positions=input_positions,
+                        llm_function=f"wrapper:{func_name}"
+                    )
+                elif summary.returns_llm_output:
+                    # Even without tainted inputs, the wrapper returns LLM data
+                    # Create a node for the output with semantic taint
+                    node_id = self.graph._make_node_id(assignment_target, line, self.file_path)
+                    self.graph.nodes[node_id] = SemanticTaintNode(
+                        id=node_id,
+                        variable_name=assignment_target,
+                        line_number=line,
+                        file_path=self.file_path,
+                        taint_types={SemanticTaintType.LLM_OUTPUT, SemanticTaintType.SEMANTIC_INFLUENCE},
+                        influence_strength=summary.influence_decay,
+                        llm_hops=summary.llm_hops_added,
+                        metadata={'source': 'wrapper_function', 'wrapper': func_name}
+                    )
+
+    def _propagate_full_inter_procedural(self) -> None:
+        """
+        Full inter-procedural taint analysis.
+
+        This performs more precise analysis by:
+        1. Building a call graph
+        2. Tracking taint through all function calls (not just wrappers)
+        3. Handling transitive taint propagation
+
+        Note: This is more expensive than summary-based analysis.
+        """
+        # First, do the summary-based propagation
+        self._propagate_through_wrapper_calls()
+
+        # Then, iterate to propagate taint through all function calls
+        # until we reach a fixed point
+        changed = True
+        max_iterations = 10
+        iteration = 0
+
+        while changed and iteration < max_iterations:
+            changed = False
+            iteration += 1
+
+            for call in self.parsed_data.get('structured_calls', []):
+                func_name = call.get('function', '')
+                assignment_target = call.get('assignment_target')
+                line = call.get('line', 0)
+
+                if not assignment_target:
+                    continue
+
+                # Skip if we already have a node for this assignment
+                node_id = self.graph._make_node_id(assignment_target, line, self.file_path)
+                if node_id in self.graph.nodes:
+                    continue
+
+                # Check if any argument is tainted
+                tainted_inputs = []
+                max_influence = 0.0
+                max_hops = 0
+
+                for arg in call.get('arguments', []):
+                    arg_vars = self._extract_vars_from_value(arg)
+                    for var in arg_vars:
+                        source_node_id = self.graph.find_node_by_var(var, line)
+                        if source_node_id:
+                            source_node = self.graph.nodes[source_node_id]
+                            tainted_inputs.append(source_node)
+                            max_influence = max(max_influence, source_node.influence_strength)
+                            max_hops = max(max_hops, source_node.llm_hops)
+
+                # If we have tainted inputs, propagate to the output
+                if tainted_inputs:
+                    # Check if called function is an LLM wrapper
+                    is_llm_wrapper = func_name in self._llm_wrapper_functions
+
+                    # Calculate influence decay
+                    influence_decay = 0.95  # Small decay for function calls
+                    if is_llm_wrapper:
+                        influence_decay = InfluenceStrength.STRONG.value
+                        max_hops += 1
+
+                    combined_types = set()
+                    for node in tainted_inputs:
+                        combined_types.update(node.taint_types)
+
+                    if is_llm_wrapper:
+                        combined_types.add(SemanticTaintType.LLM_OUTPUT)
+                        combined_types.add(SemanticTaintType.SEMANTIC_INFLUENCE)
+
+                    self.graph.nodes[node_id] = SemanticTaintNode(
+                        id=node_id,
+                        variable_name=assignment_target,
+                        line_number=line,
+                        file_path=self.file_path,
+                        taint_types=combined_types,
+                        influence_strength=max_influence * influence_decay,
+                        source_nodes=[n.id for n in tainted_inputs],
+                        llm_hops=max_hops,
+                        metadata={'source': 'function_call', 'function': func_name}
+                    )
+                    changed = True
+
+    def get_function_summaries(self) -> Dict[str, FunctionSummary]:
+        """Get computed function summaries."""
+        return self._function_summaries
+
+    def get_llm_wrapper_functions(self) -> Set[str]:
+        """Get names of identified LLM wrapper functions."""
+        return self._llm_wrapper_functions

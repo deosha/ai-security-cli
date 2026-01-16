@@ -3,7 +3,7 @@
 import ast
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 # Handle ast.unparse for Python 3.8 compatibility
 try:
@@ -27,82 +27,106 @@ class PythonASTParser:
     - LLM API calls
     """
 
-    # LLM library patterns to detect
+    # Known LLM libraries for import tracking
+    LLM_LIBRARIES = {
+        'openai', 'anthropic', 'langchain', 'langchain_core', 'langchain_openai',
+        'langchain_anthropic', 'langchain_community', 'llama_index', 'ollama',
+        'vllm', 'together', 'mistralai', 'groq', 'cohere', 'replicate',
+        'transformers', 'vertexai', 'google.generativeai', 'bedrock', 'boto3',
+        'azure.ai', 'litellm', 'guidance', 'dspy', 'semantic_kernel',
+    }
+
+    # LLM library patterns to detect - SPECIFIC patterns only (no generic ones)
     LLM_PATTERNS = [
-        # OpenAI
-        'openai.',
-        'ChatOpenAI',
-        'AsyncOpenAI',
-        # Anthropic
-        'anthropic.',
-        'ChatAnthropic',
+        # OpenAI - specific API calls
+        'openai.chat.completions.create',
+        'openai.completions.create',
+        'client.chat.completions.create',
+        'client.completions.create',
+        'OpenAI(',
+        'ChatOpenAI(',
+        'AsyncOpenAI(',
+        # Anthropic - specific API calls
+        'anthropic.messages.create',
+        'client.messages.create',
         'Anthropic(',
-        'AsyncAnthropic',
-        '.messages.create',   # Anthropic messages API
-        # LangChain
+        'ChatAnthropic(',
+        'AsyncAnthropic(',
+        # LangChain - specific classes/methods
         'langchain',
         'llama_index',
-        'ChatVertexAI',
-        'ChatBedrock',
-        # Ollama
-        'ollama.',
+        '.invoke',            # LangChain invoke method
+        '.ainvoke',           # LangChain async invoke
+        '.stream',            # LangChain streaming (not http stream)
+        '.astream',           # LangChain async streaming
+        'ChatVertexAI(',
+        'ChatBedrock(',
+        'ChatOllama(',
+        # Ollama - specific patterns
+        'ollama.chat',
+        'ollama.generate',
         'Ollama(',
-        'ChatOllama',
         'localhost:11434',    # Default Ollama port
         'api/generate',       # Ollama API endpoint
         'api/chat',           # Ollama chat endpoint
-        # vLLM
-        'vllm.',
-        'LLM(',               # vLLM LLM class
-        'SamplingParams',     # vLLM sampling
+        # vLLM - specific classes
+        'vllm.LLM(',
+        'SamplingParams(',
         # Together AI
-        'together.',
+        'together.Complete',
         'Together(',
         # Mistral
-        'mistralai.',
+        'mistralai.chat',
         'Mistral(',
         # Groq
-        'groq.',
+        'groq.chat',
         'Groq(',
         # Cohere
-        'cohere.',
+        'cohere.generate',
+        'cohere.chat',
         'Cohere(',
-        '.generate(',         # Cohere generate
         # Replicate
-        'replicate.',
+        'replicate.run',
         'Replicate(',
-        # Hugging Face
-        'transformers.',
-        'pipeline(',
+        # Hugging Face - specific classes
         'AutoModelForCausalLM',
-        'InferenceClient',
-        # AWS Bedrock
-        'bedrock.',
+        'InferenceClient(',
+        # AWS Bedrock - specific
         'invoke_model',
-        # Google Vertex AI
-        'vertexai.',
-        'GenerativeModel',
+        'bedrock-runtime',
+        # Google Vertex AI - specific
+        'GenerativeModel(',
         'generate_content',
+        'vertexai.generative_models',
         # Azure OpenAI
-        'AzureOpenAI',
-        'azure.ai.',
-        # Generic LLM patterns
-        'llm.',
-        'model.',
-        '.generate',
-        '.complete',
-        '.chat',
-        '.invoke',            # LangChain invoke pattern
-        '.predict',           # Common LLM method
-        '.run',               # LangChain chains
+        'AzureOpenAI(',
+        # LiteLLM
+        'litellm.completion',
+        'litellm.acompletion',
         # Fine-tuning API patterns
-        '.fine_tuning.',
-        '.finetune.',
-        'FineTune.',
-        '.training.',
-        '.fine_tune.',
-        '.tuning.',
+        '.fine_tuning.jobs.create',
+        'FineTuningJob(',
     ]
+
+    # Patterns that should NOT be considered LLM calls (exclusions)
+    NON_LLM_PATTERNS = {
+        # Django/SQLAlchemy ORM
+        'models.', 'Model.', '.objects.', '.query(', '.filter(', '.save(', '.delete(',
+        'session.query', 'Session(',
+        # HTTP libraries (generic responses, not LLM)
+        'requests.get', 'requests.post', 'httpx.get', 'httpx.post',
+        'aiohttp.ClientSession', 'urllib.',
+        # Standard library
+        'subprocess.', 'os.path', 'sys.', 'pathlib.',
+        'json.', 'pickle.', 're.', 'datetime.',
+        # ML (non-LLM) - sklearn, torch, tensorflow
+        'sklearn.', 'torch.nn', 'tensorflow.', 'keras.',
+        'numpy.', 'pandas.', 'scipy.',
+        # Database
+        'sqlite3.', 'psycopg2.', 'mysql.', 'pymongo.',
+        # Common false positive methods
+        '.to_dict(', '.to_json(', '.serialize(', '.validate(',
+    }
 
     def __init__(self, file_path: str):
         """
@@ -186,6 +210,68 @@ class PythonASTParser:
 
         return imports
 
+    def _extract_llm_imports(self) -> Dict[str, str]:
+        """
+        Extract imports from known LLM libraries.
+
+        Returns:
+            Dict mapping local name -> library module
+            e.g., {'client': 'openai', 'Claude': 'anthropic', 'ChatOpenAI': 'langchain_openai'}
+        """
+        llm_imports: Dict[str, str] = {}
+
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    module = alias.name
+                    local_name = alias.asname or alias.name
+                    # Check if this is an LLM library
+                    base_module = module.split('.')[0]
+                    if base_module in self.LLM_LIBRARIES or module in self.LLM_LIBRARIES:
+                        llm_imports[local_name] = module
+
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ''
+                base_module = module.split('.')[0]
+                is_llm_module = base_module in self.LLM_LIBRARIES or module in self.LLM_LIBRARIES
+
+                if is_llm_module:
+                    for alias in node.names:
+                        local_name = alias.asname or alias.name
+                        llm_imports[local_name] = f"{module}.{alias.name}"
+
+        return llm_imports
+
+    def _is_confirmed_llm_call(self, call_str: str, llm_imports: Dict[str, str]) -> bool:
+        """
+        Check if a call is confirmed to be an LLM API call.
+
+        Args:
+            call_str: The unparsed call string (e.g., 'client.chat.completions.create')
+            llm_imports: Dict of local names to LLM library modules
+
+        Returns:
+            True if the call is confirmed to be from an LLM library
+        """
+        # First check exclusions - if it matches an exclusion pattern, reject it
+        for excl in self.NON_LLM_PATTERNS:
+            if excl in call_str:
+                return False
+
+        # Check if call matches a specific LLM pattern
+        if any(pattern in call_str for pattern in self.LLM_PATTERNS):
+            return True
+
+        # Check if the call's base object is from an LLM import
+        # e.g., if 'client' is imported from openai, then client.chat.completions.create is LLM
+        call_parts = call_str.split('.')
+        if call_parts:
+            base_name = call_parts[0]
+            if base_name in llm_imports:
+                return True
+
+        return False
+
     def _extract_functions(self) -> List[Dict[str, Any]]:
         """Extract function definitions"""
         functions = []
@@ -218,7 +304,7 @@ class PythonASTParser:
         return classes
 
     def _extract_assignments(self) -> List[Dict[str, Any]]:
-        """Extract variable assignments"""
+        """Extract variable assignments with referenced variables"""
         assignments = []
 
         for node in ast.walk(self.tree):
@@ -226,13 +312,24 @@ class PythonASTParser:
                 for target in node.targets:
                     if isinstance(target, ast.Name):
                         value_str = self._unparse_safe(node.value)
+                        # Extract variables referenced in the value
+                        value_vars = self._extract_names_from_node(node.value)
                         assignments.append({
                             'name': target.id,
                             'value': value_str,
                             'line': node.lineno,
+                            'value_vars': value_vars,
                         })
 
         return assignments
+
+    def _extract_names_from_node(self, node: ast.AST) -> List[str]:
+        """Extract all variable names referenced in an AST node"""
+        names = []
+        for child in ast.walk(node):
+            if isinstance(child, ast.Name):
+                names.append(child.id)
+        return names
 
     # HTTP client patterns that might call LLM APIs
     HTTP_CLIENT_PATTERNS = ['httpx.post', 'requests.post', 'aiohttp']
@@ -249,19 +346,33 @@ class PythonASTParser:
 
     def _extract_llm_calls(self) -> List[Dict[str, Any]]:
         """
-        Extract LLM API calls
+        Extract LLM API calls with import-aware validation.
 
         Detects calls to: openai, anthropic, langchain, ollama, etc.
         Also detects HTTP calls to local LLM endpoints.
+
+        Uses import tracking to reduce false positives from generic patterns
+        like model.generate() or response.content.
         """
         llm_calls = []
+
+        # Get LLM imports for validation
+        llm_imports = self._extract_llm_imports()
+
+        # Build a map of call nodes to their assignment targets
+        call_to_target = {}
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Assign):
+                if isinstance(node.value, ast.Call):
+                    if node.targets and isinstance(node.targets[0], ast.Name):
+                        call_to_target[id(node.value)] = node.targets[0].id
 
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Call):
                 call_str = self._unparse_safe(node.func)
 
-                # Check if this looks like an LLM call
-                is_llm_call = any(pattern in call_str for pattern in self.LLM_PATTERNS)
+                # Use import-aware validation to check if this is an LLM call
+                is_llm_call = self._is_confirmed_llm_call(call_str, llm_imports)
 
                 # Also check HTTP clients calling LLM endpoints (e.g., Ollama)
                 if not is_llm_call and any(p in call_str for p in self.HTTP_CLIENT_PATTERNS):
@@ -283,7 +394,9 @@ class PythonASTParser:
                             kw.arg: self._unparse_safe(kw.value)
                             for kw in node.keywords
                             if kw.arg is not None
-                        }
+                        },
+                        'assignment_target': call_to_target.get(id(node)),
+                        'confirmed_llm_library': llm_imports.get(call_str.split('.')[0], None)
                     })
 
         return llm_calls
@@ -436,7 +549,8 @@ class PythonASTParser:
             'full_call': 'secretsmanager.get_secret_value',
             'line': 42,
             'arguments': [...],
-            'keywords': {...}
+            'keywords': {...},
+            'assignment_target': 'result'  # Variable receiving return value
         }
         """
         calls = []
@@ -450,6 +564,14 @@ class PythonASTParser:
             elif imp['type'] == 'from_import':
                 for name in imp['names']:
                     import_map[name] = f"{imp['module']}.{name}"
+
+        # Build a map of call nodes to their assignment targets
+        call_to_target = {}
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.Assign):
+                if isinstance(node.value, ast.Call):
+                    if node.targets and isinstance(node.targets[0], ast.Name):
+                        call_to_target[id(node.value)] = node.targets[0].id
 
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Call):
@@ -465,7 +587,8 @@ class PythonASTParser:
                             kw.arg: self._unparse_safe(kw.value)
                             for kw in node.keywords
                             if kw.arg is not None
-                        }
+                        },
+                        'assignment_target': call_to_target.get(id(node))
                     })
 
         return calls

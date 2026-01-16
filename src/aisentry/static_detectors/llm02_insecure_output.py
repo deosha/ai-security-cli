@@ -93,6 +93,25 @@ class InsecureOutputDetector(BaseDetector):
         'eval(', 'exec(', 'compile(', '__import__'
     }
 
+    # SSRF sinks - URL fetching with untrusted URLs
+    SSRF_SINKS = {
+        'requests.get', 'requests.post', 'requests.put', 'requests.delete',
+        'requests.head', 'requests.request',
+        'urllib.request.urlopen', 'urllib.urlopen',
+        'httpx.get', 'httpx.post', 'httpx.request',
+        'aiohttp.request', 'http.client.HTTPConnection',
+        'urlopen(', 'fetch('
+    }
+
+    # Deserialization sinks - unsafe deserialization
+    DESERIALIZATION_SINKS = {
+        'pickle.loads', 'pickle.load',
+        'yaml.load', 'yaml.unsafe_load',
+        'marshal.loads', 'marshal.load',
+        'shelve.open',
+        'jsonpickle.decode',
+    }
+
     # Sanitization functions that reduce risk
     SANITIZATION_PATTERNS = {
         'escape', 'sanitize', 'quote', 'bleach', 'clean',
@@ -259,7 +278,7 @@ class InsecureOutputDetector(BaseDetector):
 
                 # First, find which line actually contains the sink
                 sink_line_num = None
-                for sink in list(self.COMMAND_SINKS) + list(self.XSS_SINKS) + list(self.SQL_SINKS) + list(self.EVAL_SINKS):
+                for sink in list(self.COMMAND_SINKS) + list(self.XSS_SINKS) + list(self.SQL_SINKS) + list(self.EVAL_SINKS) + list(self.SSRF_SINKS) + list(self.DESERIALIZATION_SINKS):
                     if sink.lower() in code_block:
                         # Find the line containing this sink
                         for j in range(search_start, search_end):
@@ -381,6 +400,28 @@ class InsecureOutputDetector(BaseDetector):
                             intermediate_vars=[]
                         )
 
+                for sink in self.SSRF_SINKS:
+                    if sink.lower() in code_block:
+                        return OutputFlow(
+                            llm_call_line=llm_line,
+                            llm_function=llm_func_name,
+                            sink_line=i + 1,
+                            sink_type='ssrf',
+                            sink_function=sink,
+                            intermediate_vars=[]
+                        )
+
+                for sink in self.DESERIALIZATION_SINKS:
+                    if sink.lower() in code_block:
+                        return OutputFlow(
+                            llm_call_line=llm_line,
+                            llm_function=llm_func_name,
+                            sink_line=i + 1,
+                            sink_type='deserialization',
+                            sink_function=sink,
+                            intermediate_vars=[]
+                        )
+
         return None
 
     def _track_output_variables(
@@ -477,6 +518,14 @@ class InsecureOutputDetector(BaseDetector):
             elif not sink_type and any(pattern in line for pattern in self.EVAL_SINKS):
                 sink_type = 'code_execution'
                 sink_func = next((p for p in self.EVAL_SINKS if p in line), 'eval')
+
+            elif not sink_type and any(pattern in line for pattern in self.SSRF_SINKS):
+                sink_type = 'ssrf'
+                sink_func = next((p for p in self.SSRF_SINKS if p in line), 'requests.get')
+
+            elif not sink_type and any(pattern in line for pattern in self.DESERIALIZATION_SINKS):
+                sink_type = 'deserialization'
+                sink_func = next((p for p in self.DESERIALIZATION_SINKS if p in line), 'pickle.loads')
 
             if sink_type:
                 # Check if sanitization is present
@@ -810,6 +859,8 @@ class InsecureOutputDetector(BaseDetector):
             (self.SQL_SINKS, SinkType.SQL),
             (self.XSS_SINKS, SinkType.XSS),
             (self.EVAL_SINKS, SinkType.CODE_EXEC),
+            (self.SSRF_SINKS, SinkType.HTTP),
+            (self.DESERIALIZATION_SINKS, SinkType.CODE_EXEC),  # Deserialization can lead to RCE
         ]
 
         for node in ast.walk(func_node):
