@@ -11,10 +11,9 @@ This module is essential because:
 """
 
 import random
-import string
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 
 class VulnerabilityLabel(Enum):

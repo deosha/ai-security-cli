@@ -38,6 +38,9 @@ from aisentry.static_detectors import (
     SupplyChainDetector,
     TrainingPoisoningDetector,
 )
+from aisentry.utils.scoring import calculate_overall_score
+from aisentry.fp_reducer import FPReducer, Finding as FPFinding, SKLEARN_AVAILABLE
+
 
 # Optional advanced detectors (imported conditionally to avoid startup cost)
 def _get_ml_detector():
@@ -45,12 +48,11 @@ def _get_ml_detector():
     from aisentry.static_detectors.ml_prompt_injection import MLPromptInjectionDetector
     return MLPromptInjectionDetector
 
+
 def _get_taint_detector():
     """Lazily import semantic taint detector."""
     from aisentry.static_detectors.semantic_taint_detector import SemanticTaintDetector
     return SemanticTaintDetector
-from aisentry.utils.scoring import calculate_overall_score
-from aisentry.fp_reducer import FPReducer, Finding as FPFinding, SKLEARN_AVAILABLE
 
 logger = logging.getLogger(__name__)
 

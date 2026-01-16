@@ -16,7 +16,7 @@ import ast
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from aisentry.utils.ast_utils import (
     get_full_call_name,
@@ -1469,13 +1469,11 @@ EXTENDED_LLM_PATTERNS = {
 
 # LLM argument positions mapping
 LLM_ARG_POSITIONS = {
-    # OpenAI-style
+    # OpenAI/Anthropic-style
     'messages': 'prompt',
     'prompt': 'prompt',
     'system': 'system',
     'user': 'prompt',
-    # Anthropic-style
-    'system': 'system',
     # LangChain-style
     'input': 'prompt',
     'query': 'prompt',

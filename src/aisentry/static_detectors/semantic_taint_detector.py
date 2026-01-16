@@ -195,9 +195,9 @@ class SemanticTaintDetector(BaseDetector):
             f"User-controlled data flows through {llm_hops} LLM call(s) and reaches "
             f"a {sink.category.replace('_', ' ')} sink at `{sink.function_name}()`.",
             "",
-            f"**Why this is dangerous:** Even though the data is transformed by the LLM, "
-            f"an attacker can craft inputs that influence the LLM output to contain "
-            f"malicious payloads. This is known as 'indirect prompt injection'.",
+            "**Why this is dangerous:** Even though the data is transformed by the LLM, "
+            "an attacker can craft inputs that influence the LLM output to contain "
+            "malicious payloads. This is known as 'indirect prompt injection'.",
             "",
             f"**Taint path:** {path_desc}",
             "",

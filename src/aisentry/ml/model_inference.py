@@ -11,7 +11,7 @@ Model loading is lazy and thread-safe.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -68,11 +68,9 @@ class ONNXInference:
 
         # Check ONNX Runtime availability
         if ONNXInference._ort_available is None:
-            try:
-                import onnxruntime
-                ONNXInference._ort_available = True
-            except ImportError:
-                ONNXInference._ort_available = False
+            import importlib.util
+            ONNXInference._ort_available = importlib.util.find_spec("onnxruntime") is not None
+            if not ONNXInference._ort_available:
                 logger.info("ONNX Runtime not available")
 
     @classmethod

@@ -17,7 +17,6 @@ Usage:
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -48,7 +47,7 @@ try:
         precision_recall_fscore_support,
         roc_auc_score,
     )
-    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+    from sklearn.ensemble import GradientBoostingClassifier
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False

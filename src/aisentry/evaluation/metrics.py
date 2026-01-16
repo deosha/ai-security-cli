@@ -10,7 +10,6 @@ Key Metrics:
 - Detection Latency: Time to scan (important for CI/CD integration)
 """
 
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path

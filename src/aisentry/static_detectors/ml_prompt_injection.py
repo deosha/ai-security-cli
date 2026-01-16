@@ -176,7 +176,7 @@ class MLPromptInjectionDetector(BaseDetector):
                     'function': func_name,
                     'type': 'vulnerable_function',
                     'snippet': self._get_context(source_lines, func_line, 5),
-                    'reason': f'Function with user input parameter and LLM call'
+                    'reason': 'Function with user input parameter and LLM call'
                 })
 
         # Priority 3: String operations that might be prompt construction
